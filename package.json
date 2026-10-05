@@ -1,0 +1,33 @@
+{
+  "name": "group-9-payment-project",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "node server/server.js",
+    "dev": "nodemon server/server.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shotmaster1/Group-9-Payment-Project.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/shotmaster1/Group-9-Payment-Project/issues"
+  },
+  "homepage": "https://github.com/shotmaster1/Group-9-Payment-Project#readme",
+  "dependencies": {
+    "dotenv": "^18.0.5",
+    "express": "^5.2.1",
+    "sqlite3": "^6.0.1"
+  },
+  "allowScripts": {
+    "sqlite3@6.0.1": true
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14"
+  }
+}
