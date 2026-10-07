@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Checkout | Group 9 Payment Project</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <style>
+    .checkout {
+      --ink: #1d2733;
+      --muted: #5c6b7a;
+      --line: #c9d2db;
+      --field: #ffffff;
+      --page: #eef2f5;
+      --accent: #1f5f8b;
+      --error: #b3261e;
+      --ok: #1e6b3a;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      color: var(--ink);
+      background: var(--page);
+      min-height: 100vh;
+      margin: 0;
+      padding: 2rem 1rem;
+    }
+    .checkout main { max-width: 36rem; margin: 0 auto; }
+    .checkout h1 { font-size: 1.75rem; margin: 0 0 0.25rem; }
+    .order-summary { color: var(--muted); margin: 0 0 1.5rem; }
+    .order-summary strong { color: var(--ink); }
+    .checkout fieldset {
+      border: 1px solid var(--line);
+      background: var(--field);
+      border-radius: 6px;
+      padding: 1rem 1.25rem 1.25rem;
+      margin: 0 0 1.25rem;
+      min-width: 0;
+    }
+    .checkout legend { font-weight: 600; padding: 0 0.35rem; }
+    .row { display: grid; gap: 0.75rem; grid-template-columns: 1fr 1fr; }
+    .row.three { grid-template-columns: 2fr 1fr 1fr; }
+    .field { display: flex; flex-direction: column; margin-top: 0.75rem; }
+    .field label { font-size: 0.9rem; margin-bottom: 0.3rem; }
+    .field input {
+      font: inherit;
+      padding: 0.55rem 0.65rem;
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      width: 100%;
+      min-width: 0;
+      box-sizing: border-box;
+    }
+    .field input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+    .field input[aria-invalid="true"] { border-color: var(--error); }
+    .field .error { color: var(--error); font-size: 0.85rem; min-height: 1.1em; margin-top: 0.25rem; }
+    .card-wrap { position: relative; }
+    .card-wrap input { width: 100%; box-sizing: border-box; padding-right: 7rem; }
+    .card-type {
+      position: absolute; right: 0.65rem; top: 50%; transform: translateY(-50%);
+      font-size: 0.85rem; color: var(--muted);
+    }
+    .pay-button {
+      width: 100%; font: inherit; font-weight: 600;
+      padding: 0.8rem; border: 0; border-radius: 4px;
+      background: var(--accent); color: #fff; cursor: pointer;
+    }
+    .pay-button:disabled { opacity: 0.6; cursor: wait; }
+    .pay-button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+    .result { margin-top: 1rem; padding: 0.9rem 1rem; border-radius: 4px; display: none; }
+    .result.show { display: block; }
+    .result.success { background: #e3f2e8; color: var(--ok); }
+    .result.failure { background: #fbe9e7; color: var(--error); }
+    @media (max-width: 520px) {
+      .row, .row.three { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body class="checkout">
+  <main>
+    <h1>Checkout</h1>
+    <p class="order-summary">Order <strong id="order-id">—</strong>, total <strong id="order-total">—</strong></p>
+
+    <div id="checkout-form" novalidate>
+      <fieldset>
+        <legend>Customer</legend>
+        <div class="row">
+          <div class="field">
+            <label for="firstName">First name</label>
+            <input id="firstName" name="firstName" autocomplete="given-name">
+            <span class="error" id="firstName-error"></span>
+          </div>
+          <div class="field">
+            <label for="lastName">Last name</label>
+            <input id="lastName" name="lastName" autocomplete="family-name">
+            <span class="error" id="lastName-error"></span>
+          </div>
+        </div>
+        <div class="field">
+          <label for="email">Email</label>
+          <input id="email" name="email" type="email" autocomplete="email">
+          <span class="error" id="email-error"></span>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Billing address</legend>
+        <div class="field">
+          <label for="address">Street address</label>
+          <input id="address" name="address" autocomplete="street-address">
+          <span class="error" id="address-error"></span>
+        </div>
+        <div class="row three">
+          <div class="field">
+            <label for="city">City</label>
+            <input id="city" name="city" autocomplete="address-level2">
+            <span class="error" id="city-error"></span>
+          </div>
+          <div class="field">
+            <label for="state">State</label>
+            <input id="state" name="state" maxlength="2" autocomplete="address-level1">
+            <span class="error" id="state-error"></span>
+          </div>
+          <div class="field">
+            <label for="zip">ZIP</label>
+            <input id="zip" name="zip" inputmode="numeric" maxlength="10" autocomplete="postal-code">
+            <span class="error" id="zip-error"></span>
+          </div>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Card</legend>
+        <div class="field">
+          <label for="cardNumber">Card number</label>
+          <div class="card-wrap">
+            <input id="cardNumber" name="cardNumber" inputmode="numeric" autocomplete="cc-number" maxlength="23">
+            <span class="card-type" id="card-type" aria-live="polite"></span>
+          </div>
+          <span class="error" id="cardNumber-error"></span>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label for="expiration">Expiration (MM/YY)</label>
+            <input id="expiration" name="expiration" inputmode="numeric" placeholder="MM/YY" maxlength="5" autocomplete="cc-exp">
+            <span class="error" id="expiration-error"></span>
+          </div>
+          <div class="field">
+            <label for="cvv">Security code</label>
+            <input id="cvv" name="cvv" inputmode="numeric" maxlength="3" autocomplete="cc-csc">
+            <span class="error" id="cvv-error"></span>
+          </div>
+        </div>
+      </fieldset>
+
+      <button type="button" class="pay-button" id="pay-button">Pay now</button>
+      <div class="result" id="result" role="status" aria-live="polite"></div>
+    </div>
+  </main>
+
+  <script src="js/validation.js"></script>
+  <script src="js/checkout.js"></script>
+</body>
+</html>
