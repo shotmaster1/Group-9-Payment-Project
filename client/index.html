@@ -1,11 +1,62 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>Group 9 Payment Project</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Group 9 Payment Project</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #eef2f5;
+      color: #1d2733;
+      margin: 0;
+      padding: 3rem 1.5rem;
+      display: flex;
+      justify-content: center;
+    }
+    main {
+      background: #ffffff;
+      padding: 2.5rem;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+      max-width: 28rem;
+      width: 100%;
+    }
+    h1 { font-size: 1.5rem; margin-top: 0; }
+    .status-badge {
+      display: inline-block;
+      background: #e3f2e8;
+      color: #1e6b3a;
+      padding: 0.35rem 0.75rem;
+      border-radius: 4px;
+      font-weight: 600;
+      font-size: 0.85rem;
+      margin-bottom: 1.5rem;
+    }
+    ul { list-style: none; padding: 0; margin: 0; }
+    li { margin-bottom: 0.75rem; }
+    a {
+      display: block;
+      padding: 0.75rem 1rem;
+      background: #1f5f8b;
+      color: #ffffff;
+      text-decoration: none;
+      border-radius: 4px;
+      font-weight: 500;
+      transition: background 0.2s ease;
+    }
+    a:hover { background: #18486b; }
+  </style>
 </head>
 <body>
+  <main>
     <h1>Group 9 Payment Project</h1>
-    <p>Server is running successfully.</p>
+    <div class="status-badge">✓ Server is running successfully</div>
+    
+    <p>Select a portal to demo:</p>
+    <ul>
+      <li><a href="checkout.html?orderId=DEMO-1001&amount=89.98">Launch Customer Checkout</a></li>
+    </ul>
+  </main>
 </body>
 </html>
