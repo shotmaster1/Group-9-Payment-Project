@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Warehouse Settlement</title>
+</head>
+
+<body>
+
+    <h1>Warehouse Settlement</h1>
+
+    <form id="settlementForm">
+
+        <div>
+            <label for="orderId">Order ID:</label>
+            <input
+                type="text"
+                id="orderId"
+                name="orderId"
+                required
+            >
+        </div>
+
+        <br>
+
+        <div>
+            <label for="finalAmount">Final Shipment Amount:</label>
+            <input
+                type="number"
+                id="finalAmount"
+                name="finalAmount"
+                step="0.01"
+                min="0"
+                required
+            >
+        </div>
+
+        <br>
+
+        <button type="submit">Submit Settlement</button>
+
+    </form>
+
+    <p id="result"></p>
+
+    <script src="js/settlement.js"></script>
+
+</body>
+</html>
