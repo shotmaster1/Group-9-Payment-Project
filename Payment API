@@ -122,22 +122,44 @@ async function processPayment(payment) {
     }
 
 
+    const reason = data.Reason || "";
+
     // -------------------------
-    // Successful authorization
+    // HTTP 200 response
     // -------------------------
     if (response.status === 200) {
+
+      // A real successful authorization must actually
+      // contain an authorization token and amount.
+      const validAuthorization =
+        data.AuthorizationToken &&
+        Number(data.AuthorizedAmount) > 0;
+
+      if (validAuthorization) {
+        return {
+          success: true,
+          orderId: data.OrderId,
+          authorizationToken: data.AuthorizationToken,
+          tokenExpirationDate: data.TokenExpirationDate,
+          authorizedAmount: Number(data.AuthorizedAmount),
+          reason: reason
+        };
+      }
+
+      // The MA mock API can return HTTP 200 while the
+      // response body still indicates a declined payment.
+      if (reason.toLowerCase().includes("insufficient")) {
+        return {
+          success: false,
+          status: "Payment Declined - Insufficient Funds",
+          message: reason || "There are insufficient funds to complete the purchase."
+        };
+      }
+
       return {
-        success: true,
-
-        orderId: data.OrderId,
-
-        authorizationToken: data.AuthorizationToken,
-
-        tokenExpirationDate: data.TokenExpirationDate,
-
-        authorizedAmount: data.AuthorizedAmount,
-
-        reason: data.Reason || ''
+        success: false,
+        status: "Payment Declined",
+        message: reason || "The payment authorization was declined."
       };
     }
 
@@ -145,17 +167,16 @@ async function processPayment(payment) {
     // -------------------------
     // Invalid card information
     // -------------------------
-    if (response.status === 400 ||
-        response.status === 422) {
-
+    if (
+      response.status === 400 ||
+      response.status === 422
+    ) {
       return {
         success: false,
-
-        status: 'Payment Declined',
-
+        status: "Payment Declined",
         message:
-          data.Reason ||
-          'The payment information is invalid.'
+          reason ||
+          "The payment information is invalid."
       };
     }
 
@@ -166,13 +187,10 @@ async function processPayment(payment) {
     if (response.status === 402) {
       return {
         success: false,
-
-        status:
-          'Payment Declined - Insufficient Funds',
-
+        status: "Payment Declined - Insufficient Funds",
         message:
-          data.Reason ||
-          'There are insufficient funds to complete the purchase.'
+          reason ||
+          "There are insufficient funds to complete the purchase."
       };
     }
 
@@ -187,12 +205,10 @@ async function processPayment(payment) {
     ) {
       return {
         success: false,
-
-        status:
-          'Payment Service Unavailable',
-
+        status: "Payment Service Unavailable",
         message:
-          'The payment service is temporarily unavailable.'
+          reason ||
+          "The payment service is temporarily unavailable."
       };
     }
 
@@ -202,27 +218,24 @@ async function processPayment(payment) {
     // -------------------------
     return {
       success: false,
-
-      status: 'Payment Error',
-
+      status: "Payment Error",
       message:
-        'The payment could not be processed.'
+        reason ||
+        "The payment could not be processed."
     };
 
   } catch (error) {
 
     console.error(
-      'Payment processing error:',
+      "Payment processing error:",
       error
     );
 
     return {
       success: false,
-
-      status: 'Payment Error',
-
+      status: "Payment Error",
       message:
-        'Unable to contact the payment service.'
+        "Unable to contact the payment service."
     };
   }
 }

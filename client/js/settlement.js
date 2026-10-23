@@ -1,3 +1,10 @@
+const params = new URLSearchParams(window.location.search);
+const selectedOrderId = params.get("orderId");
+
+if (selectedOrderId) {
+    document.getElementById("orderId").value = selectedOrderId;
+}
+
 const form = document.getElementById("settlementForm");
 
 form.addEventListener("submit", function(event) {
@@ -20,10 +27,29 @@ form.addEventListener("submit", function(event) {
         finalAmount: finalAmount
     })
 })
-.then(response => response.json())
-.then(data => {
-    document.getElementById("result").textContent = data.message;
+
+.then(async response => {
+    const data = await response.json();
+
+    return {
+        ok: response.ok,
+        status: response.status,
+        data: data
+    };
 })
+.then(result => {
+    const messageBox = document.getElementById("result");
+
+    messageBox.textContent = result.data.message;
+
+    if (!result.ok) {
+        alert(result.data.message);
+        return;
+    }
+
+    alert("Settlement completed successfully.");
+})
+
 .catch(error => {
     console.error("Error:", error);
 });

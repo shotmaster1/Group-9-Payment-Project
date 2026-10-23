@@ -47,9 +47,22 @@ db.serialize(() => {
       TransactionDateTime TEXT NOT NULL,
       AuthExpirationDate TEXT,
       AuthorizationResult TEXT NOT NULL,
+      CardType TEXT,
+      CardLast4 TEXT,
       FOREIGN KEY (OrderID) REFERENCES Orders(OrderID) ON DELETE CASCADE
     )
   `);
+
+  db.run(`
+  CREATE TABLE IF NOT EXISTS Settlements (
+    SettlementID INTEGER PRIMARY KEY AUTOINCREMENT,
+    OrderID TEXT NOT NULL,
+    FinalShipmentAmount REAL NOT NULL,
+    SettlementDate TEXT NOT NULL,
+    SettlementResult TEXT NOT NULL,
+    FOREIGN KEY (OrderID) REFERENCES Orders(OrderID) ON DELETE CASCADE
+  )
+`);
 
   db.get("SELECT COUNT(*) AS count FROM Products", (err, row) => {
     if (!err && row && row.count === 0) {
