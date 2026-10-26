@@ -1,3 +1,5 @@
+require("dotenv").config();
+
 const express = require("express");
 const cors = require("cors");
 const path = require("path");
@@ -5,6 +7,7 @@ const path = require("path");
 // Import database instance and order routes
 const db = require("./database/db");
 const orderRoutes = require("./routes/orders");
+const settlementRoutes = require("./routes/settlements");
 
 // Import Quentin's payment service (if present)
 let paymentService = null;
@@ -38,6 +41,9 @@ app.get("/api/test", (req, res) => {
 
 // Mount Person C Order & Database Routes
 app.use("/api/orders", orderRoutes);
+app.use("/api/settlements", settlementRoutes);
+
+
 
 // Main Payment Route (Matches checkout.js PAYMENT_ROUTE = "/api/payments")
 app.post("/api/payments", async (req, res) => {
@@ -65,6 +71,8 @@ app.post("/api/payments", async (req, res) => {
   const fullName = `${customer.firstName || ""} ${customer.lastName || ""}`.trim();
   const orderDate = new Date().toISOString();
   const orderTotal = Number(amount || 0);
+  const cardLast4 = String(cardNumber).replace(/\D/g, "").slice(-4);
+  const safeCardType = cardType || "Unknown";
 
   // 1. Insert or Update Order in SQLite Database
   const insertOrderSql = `
@@ -103,6 +111,8 @@ app.post("/api/payments", async (req, res) => {
     };
 
     // Call Quentin's payment service if active
+
+
     if (paymentService && typeof paymentService.processPayment === "function") {
       try {
         const apiResult = await paymentService.processPayment({
@@ -114,6 +124,7 @@ app.post("/api/payments", async (req, res) => {
           ccv,
           cardType
         });
+
         if (apiResult) {
           authSuccess = apiResult.success;
           authResultData = apiResult;
@@ -127,14 +138,23 @@ app.post("/api/payments", async (req, res) => {
     if (authSuccess) {
       const fullAuthToken = `${idToUse}-${authResultData.authorizationToken || "TOK-OK"}`;
       const insertAuthSql = `
-        INSERT INTO PaymentAuthorizations 
-        (OrderID, AuthorizationToken, AuthorizationAmount, TransactionDateTime, AuthExpirationDate, AuthorizationResult)
-        VALUES (?, ?, ?, ?, ?, ?)
+          INSERT INTO PaymentAuthorizations
+          (OrderID, AuthorizationToken, AuthorizationAmount, TransactionDateTime, AuthExpirationDate, AuthorizationResult, CardType, CardLast4)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `;
 
       db.run(
         insertAuthSql,
-        [idToUse, fullAuthToken, orderTotal, orderDate, authResultData.tokenExpirationDate || "2028-12-31", "Success"],
+        [
+            idToUse,
+            fullAuthToken,
+            orderTotal,
+            orderDate,
+            authResultData.tokenExpirationDate || "2028-12-31",
+            "Success",
+            safeCardType,
+            cardLast4
+        ],
         function (authErr) {
           if (authErr) console.error("Database Auth Insert Error:", authErr.message);
 
@@ -150,12 +170,21 @@ app.post("/api/payments", async (req, res) => {
       );
     } else {
       const insertFailedAuthSql = `
-        INSERT INTO PaymentAuthorizations 
-        (OrderID, AuthorizationToken, AuthorizationAmount, TransactionDateTime, AuthExpirationDate, AuthorizationResult)
-        VALUES (?, ?, ?, ?, ?, ?)
+          INSERT INTO PaymentAuthorizations
+          (OrderID, AuthorizationToken, AuthorizationAmount, TransactionDateTime, AuthExpirationDate, AuthorizationResult, CardType, CardLast4)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `;
 
-      db.run(insertFailedAuthSql, [idToUse, `${idToUse}-FAILED`, orderTotal, orderDate, "", authResultData.status || "Failed"]);
+      db.run(insertFailedAuthSql, [
+            idToUse,
+            `${idToUse}-FAILED`,
+            orderTotal,
+            orderDate,
+            "",
+            authResultData.status || "Failed",
+            safeCardType,
+            cardLast4
+        ]);
       db.run(`UPDATE Orders SET OrderStatus = 'Payment Failed' WHERE OrderID = ?`, [idToUse]);
 
       return res.status(400).json({

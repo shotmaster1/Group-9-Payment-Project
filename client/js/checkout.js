@@ -25,7 +25,7 @@
   // The server must look up the real amount from the order; the one here is for display.
   const params = new URLSearchParams(window.location.search);
   const order = {
-    orderId: params.get("orderId") || `DEMO-${Date.now()}`,
+    orderId: params.get("orderId") || `ORD-${Date.now()}`,
     amount: Number(params.get("amount") || 0),
   };
   $("order-id").textContent = order.orderId;

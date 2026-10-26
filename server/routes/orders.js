@@ -62,7 +62,9 @@ router.get("/", (req, res) => {
       pa.AuthorizationAmount,
       pa.TransactionDateTime,
       pa.AuthExpirationDate,
-      pa.AuthorizationResult
+      pa.AuthorizationResult,
+      pa.CardType,
+      pa.CardLast4
     FROM Orders o
     LEFT JOIN PaymentAuthorizations pa ON o.OrderID = pa.OrderID
     ORDER BY o.OrderDate DESC
