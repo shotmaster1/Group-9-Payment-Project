@@ -1,62 +1,191 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Group 9 Payment Project</title>
+
+  <title>Group 9 Store</title>
+
+.cart-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.cart-actions button {
+  flex: 1;
+  width: auto;
+  padding: 0.5rem;
+  font-size: 0.85rem;
+}
+
   <style>
+    * {
+      box-sizing: border-box;
+    }
+
     body {
+      margin: 0;
       font-family: system-ui, -apple-system, sans-serif;
       background: #eef2f5;
       color: #1d2733;
-      margin: 0;
-      padding: 3rem 1.5rem;
+    }
+
+    header {
+      background: #1f5f8b;
+      color: white;
+      padding: 1rem 2rem;
       display: flex;
-      justify-content: center;
+      justify-content: space-between;
+      align-items: center;
     }
-    main {
-      background: #ffffff;
-      padding: 2.5rem;
+
+    header h1 {
+      margin: 0;
+    }
+
+    nav a {
+      color: white;
+      text-decoration: none;
+      margin-left: 1rem;
+    }
+
+    .page {
+      max-width: 1200px;
+      margin: 2rem auto;
+      padding: 0 1.5rem;
+
+      display: grid;
+      grid-template-columns: 1fr 320px;
+      gap: 2rem;
+    }
+
+    .products {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 1.5rem;
+    }
+
+    .product-card {
+      background: white;
       border-radius: 8px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-      max-width: 28rem;
-      width: 100%;
+      padding: 1.25rem;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
     }
-    h1 { font-size: 1.5rem; margin-top: 0; }
-    .status-badge {
-      display: inline-block;
-      background: #e3f2e8;
-      color: #1e6b3a;
-      padding: 0.35rem 0.75rem;
-      border-radius: 4px;
-      font-weight: 600;
-      font-size: 0.85rem;
+
+    .product-card img {
+      width: 100%;
+      height: 180px;
+      object-fit: cover;
+      border-radius: 6px;
+      background: #ddd;
+    }
+
+    .product-card h3 {
+      margin-bottom: 0.4rem;
+    }
+
+    .description {
+      color: #657180;
+      min-height: 40px;
+    }
+
+    .price {
+      font-size: 1.2rem;
+      font-weight: bold;
+    }
+
+    button {
+      width: 100%;
+      padding: 0.75rem;
+      border: none;
+      border-radius: 5px;
+      background: #1f5f8b;
+      color: white;
+      font-size: 1rem;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #18486b;
+    }
+
+    .cart {
+      background: white;
+      border-radius: 8px;
+      padding: 1.5rem;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+      height: fit-content;
+    }
+
+    .cart h2 {
+      margin-top: 0;
+    }
+
+    #cartItems {
       margin-bottom: 1.5rem;
     }
-    ul { list-style: none; padding: 0; margin: 0; }
-    li { margin-bottom: 0.75rem; }
-    a {
-      display: block;
-      padding: 0.75rem 1rem;
-      background: #1f5f8b;
-      color: #ffffff;
-      text-decoration: none;
-      border-radius: 4px;
-      font-weight: 500;
-      transition: background 0.2s ease;
+
+    .cart-item {
+      border-bottom: 1px solid #ddd;
+      padding: 0.75rem 0;
     }
-    a:hover { background: #18486b; }
+
+    .cart-total {
+      font-size: 1.2rem;
+      font-weight: bold;
+      margin-bottom: 1rem;
+    }
+
+    #checkoutButton:disabled {
+      background: #9ca7b0;
+      cursor: not-allowed;
+    }
   </style>
 </head>
+
 <body>
-  <main>
-    <h1>Group 9 Payment Project</h1>
-    <div class="status-badge">✓ Server is running successfully</div>
-    
-    <p>Select a portal to demo:</p>
-    <ul>
-      <li><a href="checkout.html?amount=89.98">Launch Customer Checkout</a></li>
-    </ul>
-  </main>
+
+  <header>
+    <h1>Group 9 Store</h1>
+
+    <nav>
+      <a href="/">Store</a>
+      <a href="orders.html">Order Management</a>
+      <a href="warehouse.html">Warehouse</a>
+    </nav>
+  </header>
+
+  <div class="page">
+
+    <main>
+      <h2>Products</h2>
+
+      <div id="products" class="products">
+        <p>Loading products...</p>
+      </div>
+    </main>
+
+    <aside class="cart">
+      <h2>Your Cart</h2>
+
+      <div id="cartItems">
+        <p>Your cart is empty.</p>
+      </div>
+
+      <div class="cart-total">
+        Total: $<span id="cartTotal">0.00</span>
+      </div>
+
+      <button id="checkoutButton" disabled>
+        Checkout
+      </button>
+    </aside>
+
+  </div>
+
+  <script src="js/cart.js"></script>
+
 </body>
 </html>

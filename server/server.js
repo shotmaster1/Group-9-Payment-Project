@@ -8,6 +8,7 @@ const path = require("path");
 const db = require("./database/db");
 const orderRoutes = require("./routes/orders");
 const settlementRoutes = require("./routes/settlements");
+const productsRouter = require("./routes/products");
 
 // Import Quentin's payment service (if present)
 let paymentService = null;
@@ -42,6 +43,7 @@ app.get("/api/test", (req, res) => {
 // Mount Person C Order & Database Routes
 app.use("/api/orders", orderRoutes);
 app.use("/api/settlements", settlementRoutes);
+app.use("/api/products", productsRouter);
 
 
 
