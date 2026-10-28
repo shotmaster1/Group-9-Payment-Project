@@ -4,12 +4,10 @@ const express = require("express");
 const cors = require("cors");
 const path = require("path");
 
-// Import database instance and order routes
 const db = require("./database/db");
 const orderRoutes = require("./routes/orders");
 const settlementRoutes = require("./routes/settlements");
 
-// Import Quentin's payment service (if present)
 let paymentService = null;
 try {
   paymentService = require("../Payment API");
@@ -17,35 +15,26 @@ try {
   try {
     paymentService = require("./services/payment");
   } catch (err) {
-    console.log("Payment service file loading in simulation fallback mode.");
+    console.log("Payment service loading in simulation fallback mode.");
   }
 }
 
-// Import client-side validation logic
 const PaymentValidation = require(path.join(__dirname, "../client/js/validation.js"));
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Middleware
 app.use(cors());
 app.use(express.json());
-
-// Serve static frontend files from client directory
 app.use(express.static(path.join(__dirname, "../client")));
 
-// Test endpoint
 app.get("/api/test", (req, res) => {
-    res.json({ message: "Group 9 server is working" });
+  res.json({ message: "Group 9 server is online." });
 });
 
-// Mount Person C Order & Database Routes
 app.use("/api/orders", orderRoutes);
 app.use("/api/settlements", settlementRoutes);
 
-
-
-// Main Payment Route (Matches checkout.js PAYMENT_ROUTE = "/api/payments")
 app.post("/api/payments", async (req, res) => {
   const { orderId, amount, customer, cardNumber, cardMonth, cardYear, ccv, cardType } = req.body;
 
@@ -57,7 +46,6 @@ app.post("/api/payments", async (req, res) => {
     });
   }
 
-  // Server-side validation
   const cardValidation = PaymentValidation.validateCardNumber(cardNumber);
   if (!cardValidation.valid) {
     return res.status(400).json({
@@ -74,7 +62,6 @@ app.post("/api/payments", async (req, res) => {
   const cardLast4 = String(cardNumber).replace(/\D/g, "").slice(-4);
   const safeCardType = cardType || "Unknown";
 
-  // 1. Insert or Update Order in SQLite Database
   const insertOrderSql = `
     INSERT INTO Orders (OrderID, CustomerName, CustomerEmail, ShippingAddress, City, State, Zip, OrderDate, OrderTotal, OrderStatus)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending')
@@ -107,11 +94,8 @@ app.post("/api/payments", async (req, res) => {
     let authResultData = {
       authorizationToken: "MA-AUTH-" + Math.random().toString(36).substring(2, 10).toUpperCase(),
       authorizedAmount: orderTotal,
-      tokenExpirationDate: "2028-12-31"
+      tokenExpirationDate: "2028-12-31T23:59:59Z"
     };
-
-    // Call Quentin's payment service if active
-
 
     if (paymentService && typeof paymentService.processPayment === "function") {
       try {
@@ -131,30 +115,25 @@ app.post("/api/payments", async (req, res) => {
         }
       } catch (apiErr) {
         console.error("External Payment API Exception:", apiErr.message);
+        authSuccess = false;
+        authResultData.status = "API Connection Error";
+        authResultData.message = apiErr.message;
       }
     }
 
-    // 2. Persist Authorization Record
     if (authSuccess) {
-      const fullAuthToken = `${idToUse}-${authResultData.authorizationToken || "TOK-OK"}`;
+      const fullAuthToken = authResultData.authorizationToken || `${idToUse}-TOK-OK`;
+      const expDate = authResultData.tokenExpirationDate || "2028-12-31";
+
       const insertAuthSql = `
-          INSERT INTO PaymentAuthorizations
-          (OrderID, AuthorizationToken, AuthorizationAmount, TransactionDateTime, AuthExpirationDate, AuthorizationResult, CardType, CardLast4)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO PaymentAuthorizations
+        (OrderID, AuthorizationToken, AuthorizationAmount, TransactionDateTime, AuthExpirationDate, AuthorizationResult, CardType, CardLast4)
+        VALUES (?, ?, ?, ?, ?, 'Success', ?, ?)
       `;
 
       db.run(
         insertAuthSql,
-        [
-            idToUse,
-            fullAuthToken,
-            orderTotal,
-            orderDate,
-            authResultData.tokenExpirationDate || "2028-12-31",
-            "Success",
-            safeCardType,
-            cardLast4
-        ],
+        [idToUse, fullAuthToken, orderTotal, orderDate, expDate, safeCardType, cardLast4],
         function (authErr) {
           if (authErr) console.error("Database Auth Insert Error:", authErr.message);
 
@@ -164,38 +143,37 @@ app.post("/api/payments", async (req, res) => {
             success: true,
             orderId: idToUse,
             status: "Authorized",
-            message: "Payment authorized successfully."
+            message: "Payment authorized successfully.",
+            authToken: fullAuthToken,
+            expirationDate: expDate
           });
         }
       );
     } else {
+      const failureReason = authResultData.message || authResultData.status || "Payment Declined";
+
       const insertFailedAuthSql = `
-          INSERT INTO PaymentAuthorizations
-          (OrderID, AuthorizationToken, AuthorizationAmount, TransactionDateTime, AuthExpirationDate, AuthorizationResult, CardType, CardLast4)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO PaymentAuthorizations
+        (OrderID, AuthorizationToken, AuthorizationAmount, TransactionDateTime, AuthExpirationDate, AuthorizationResult, CardType, CardLast4, FailureReason)
+        VALUES (?, NULL, ?, ?, NULL, 'Failed', ?, ?, ?)
       `;
 
-      db.run(insertFailedAuthSql, [
-            idToUse,
-            `${idToUse}-FAILED`,
-            orderTotal,
-            orderDate,
-            "",
-            authResultData.status || "Failed",
-            safeCardType,
-            cardLast4
-        ]);
-      db.run(`UPDATE Orders SET OrderStatus = 'Payment Failed' WHERE OrderID = ?`, [idToUse]);
+      db.run(insertFailedAuthSql, [idToUse, orderTotal, orderDate, safeCardType, cardLast4, failureReason], function (failedErr) {
+        if (failedErr) console.error("Database Failed Auth Insert Error:", failedErr.message);
 
-      return res.status(400).json({
-        success: false,
-        status: authResultData.status || "Payment Declined",
-        message: authResultData.message || "Payment processing failed."
+        db.run(`UPDATE Orders SET OrderStatus = 'Payment Failed' WHERE OrderID = ?`, [idToUse]);
+
+        return res.status(400).json({
+          success: false,
+          orderId: idToUse,
+          status: "Payment Failed",
+          message: failureReason
+        });
       });
     }
   });
 });
 
 app.listen(PORT, () => {
-    console.log(`Server running at http://localhost:${PORT}`);
+  console.log(`Server running at http://localhost:${PORT}`);
 });
