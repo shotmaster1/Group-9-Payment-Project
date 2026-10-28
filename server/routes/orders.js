@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const db = require("../database/db");
 
+// POST /api/orders
 router.post("/", (req, res) => {
   const { orderId, customer, amount } = req.body;
 
@@ -45,8 +46,11 @@ router.post("/", (req, res) => {
   });
 });
 
+// GET /api/orders with Filtering, Searching, and Sorting
 router.get("/", (req, res) => {
-  const query = `
+  const { status, search, sort } = req.query;
+
+  let query = `
     SELECT 
       o.OrderID,
       o.CustomerName,
@@ -64,17 +68,41 @@ router.get("/", (req, res) => {
       pa.AuthExpirationDate,
       pa.AuthorizationResult,
       pa.CardType,
-      pa.CardLast4
+      pa.CardLast4,
+      pa.FailureReason
     FROM Orders o
     LEFT JOIN PaymentAuthorizations pa ON o.OrderID = pa.OrderID
-    ORDER BY o.OrderDate DESC
+    WHERE 1=1
   `;
 
-  db.all(query, [], (err, rows) => {
+  const params = [];
+
+  if (status) {
+    query += ` AND o.OrderStatus = ?`;
+    params.push(status);
+  }
+
+  if (search) {
+    query += ` AND (o.OrderID LIKE ? OR o.CustomerEmail LIKE ? OR o.CustomerName LIKE ?)`;
+    const searchPattern = `%${search}%`;
+    params.push(searchPattern, searchPattern, searchPattern);
+  }
+
+  if (sort === "oldest") {
+    query += ` ORDER BY o.OrderDate ASC`;
+  } else if (sort === "amount_desc") {
+    query += ` ORDER BY o.OrderTotal DESC`;
+  } else if (sort === "amount_asc") {
+    query += ` ORDER BY o.OrderTotal ASC`;
+  } else {
+    query += ` ORDER BY o.OrderDate DESC`;
+  }
+
+  db.all(query, params, (err, rows) => {
     if (err) {
       return res.status(500).json({ success: false, message: "Failed to retrieve orders: " + err.message });
     }
-    return res.status(200).json({ success: true, orders: rows });
+    return res.status(200).json({ success: true, count: rows.length, orders: rows });
   });
 });
 
