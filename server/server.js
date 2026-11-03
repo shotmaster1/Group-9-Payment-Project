@@ -7,6 +7,7 @@ const path = require("path");
 const db = require("./database/db");
 const orderRoutes = require("./routes/orders");
 const settlementRoutes = require("./routes/settlements");
+const productsRouter = require("./routes/products");
 
 let paymentService = null;
 try {
@@ -34,6 +35,7 @@ app.get("/api/test", (req, res) => {
 
 app.use("/api/orders", orderRoutes);
 app.use("/api/settlements", settlementRoutes);
+app.use("/api/products", productsRouter);
 
 app.post("/api/payments", async (req, res) => {
   const { orderId, amount, customer, cardNumber, cardMonth, cardYear, ccv, cardType } = req.body;
