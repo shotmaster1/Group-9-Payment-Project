@@ -1,20 +1,75 @@
-let allOrders = [];
+let activeController = null;
+let requestCounter = 0;
+let searchTimer = null;
 
-async function loadOrders() {
+function showOrdersMessage(message) {
+    const tableBody = document.getElementById("ordersTableBody");
+    const row = document.createElement("tr");
+    const cell = document.createElement("td");
+    cell.colSpan = 10;
+    cell.textContent = message;
+    row.appendChild(cell);
+    tableBody.replaceChildren(row);
+}
+
+function reloadOrders(delay = 0) {
+    clearTimeout(searchTimer);
+    searchTimer = null;
+
+    // Invalidate responses immediately, including while search is debouncing.
+    const requestId = ++requestCounter;
+    if (activeController) {
+        activeController.abort();
+        activeController = null;
+    }
+    showOrdersMessage("Loading orders...");
+
+    if (delay > 0) {
+        searchTimer = setTimeout(() => {
+            searchTimer = null;
+            loadOrders(requestId);
+        }, delay);
+    } else {
+        loadOrders(requestId);
+    }
+}
+
+async function loadOrders(requestId) {
+    const controller = new AbortController();
+    activeController = controller;
+    const params = new URLSearchParams({
+        status: document.getElementById("statusFilter").value,
+        search: document.getElementById("searchInput").value.trim(),
+        sort: document.getElementById("sortOrder").value,
+    });
+
     try {
-        const response = await fetch("/api/orders");
-        const data = await response.json();
+        const response = await fetch(`/api/orders?${params.toString()}`, {
+            signal: controller.signal,
+        });
+        if (requestId !== requestCounter) return;
+        if (!response.ok) throw new Error("Order request failed");
 
-        if (!data.success) {
-            console.error("Failed to load orders:", data.message);
-            return;
+        const data = await response.json();
+        if (requestId !== requestCounter) return;
+        if (!data || data.success !== true || !Array.isArray(data.orders)) {
+            throw new Error("Invalid orders response");
         }
 
-      allOrders = data.orders;
-      renderOrders(allOrders);
-
-    } catch (error) {
-        console.error("Error loading orders:", error);
+        if (data.orders.length === 0) {
+            showOrdersMessage("No orders match your search and filters.");
+        } else {
+            // Filtering and order-date sorting are owned by the backend.
+            renderOrders(data.orders);
+        }
+    } catch {
+        if (requestId === requestCounter && !controller.signal.aborted) {
+            showOrdersMessage("Unable to load orders. Please try again.");
+        }
+    } finally {
+        if (requestId === requestCounter) {
+            activeController = null;
+        }
     }
 }
 
@@ -102,52 +157,16 @@ function openSettlement(orderId) {
         `warehouse.html?orderId=${encodeURIComponent(orderId)}`;
 }
 
-function applyFilters() {
-    const selectedSort =
-        document.getElementById("sortOrder").value;
-
-    const searchText =
-        document.getElementById("searchInput").value.toLowerCase().trim();
-
-    const selectedStatus =
-        document.getElementById("statusFilter").value;
-
-    const filteredOrders = allOrders.filter((order) => {
-
-        const matchesSearch =
-            order.OrderID.toLowerCase().includes(searchText);
-
-        const matchesStatus =
-            selectedStatus === "" ||
-            order.OrderStatus === selectedStatus;
-
-        return matchesSearch && matchesStatus;
-    });
-
-    filteredOrders.sort((a, b) => {
-        const dateA = new Date(a.TransactionDateTime || a.OrderDate);
-        const dateB = new Date(b.TransactionDateTime || b.OrderDate);
-
-        if (selectedSort === "oldest") {
-            return dateA - dateB;
-        }
-
-        return dateB - dateA;
-    });
-
-    renderOrders(filteredOrders);
-}
-
 document
     .getElementById("searchInput")
-    .addEventListener("input", applyFilters);
+    .addEventListener("input", () => reloadOrders(250));
 
 document
     .getElementById("statusFilter")
-    .addEventListener("change", applyFilters);
+    .addEventListener("change", () => reloadOrders());
 
 document
     .getElementById("sortOrder")
-    .addEventListener("change", applyFilters);
+    .addEventListener("change", () => reloadOrders());
 
-loadOrders();
+reloadOrders();
