@@ -67,11 +67,11 @@ db.serialize(() => {
   db.get("SELECT COUNT(*) AS count FROM Products", (err, row) => {
     if (!err && row && row.count === 0) {
       const stmt = db.prepare("INSERT INTO Products (Name, Description, Price, ImageURL) VALUES (?, ?, ?, ?)");
-      stmt.run("Trail Backpack", "25L hiking backpack", 64.99, "/img/p1.jpg");
-      stmt.run("Insulated Bottle", "32 oz water bottle", 24.99, "/img/p2.jpg");
-      stmt.run("Trail Cap", "Breathable running cap", 19.99, "/img/p3.jpg");
-      stmt.run("Hiking Socks", "Merino wool trail socks", 14.99, "/img/p4.jpg");
-      stmt.run("Camp Lantern", "Rechargeable LED lantern", 29.99, "/img/p5.jpg");
+      stmt.run("Trail Backpack", "25L hiking backpack", 64.99, "/img/p1.png");
+      stmt.run("Insulated Bottle", "32 oz water bottle", 24.99, "/img/p2.png");
+      stmt.run("Trail Cap", "Breathable running cap", 19.99, "/img/p3.png");
+      stmt.run("Hiking Socks", "Merino wool trail socks", 14.99, "/img/p4.png");
+      stmt.run("Camp Lantern", "Rechargeable LED lantern", 29.99, "/img/p5.png");
       stmt.finalize();
       console.log("Database seeded with sample products.");
     }

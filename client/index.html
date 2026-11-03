@@ -7,18 +7,7 @@
 
   <title>Group 9 Store</title>
 
-.cart-actions {
-  display: flex;
-  gap: 0.5rem;
-  margin-top: 0.5rem;
-}
 
-.cart-actions button {
-  flex: 1;
-  width: auto;
-  padding: 0.5rem;
-  font-size: 0.85rem;
-}
 
   <style>
     * {
@@ -138,10 +127,44 @@
       margin-bottom: 1rem;
     }
 
+
     #checkoutButton:disabled {
       background: #9ca7b0;
       cursor: not-allowed;
     }
+
+    /* Cart quantity controls */
+    .cart-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .cart-actions button {
+      width: auto;
+      padding: 8px 12px;
+      font-size: 14px;
+      border-radius: 5px;
+    }
+
+    /* Minus and plus buttons */
+    .cart-actions button:nth-child(1),
+    .cart-actions button:nth-child(2) {
+      flex: 0 0 40px;
+    }
+
+    /* Remove button */
+    .cart-actions button:nth-child(3) {
+      flex: 1;
+      background: #b3261e;
+    }
+
+    .cart-actions button:nth-child(3):hover {
+      background: #8f1e18;
+    }
+
+   
   </style>
 </head>
 

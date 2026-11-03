@@ -1,6 +1,9 @@
 
 let products = [];
-let cart = [];
+
+let cart = JSON.parse(
+  sessionStorage.getItem("group9Cart") || "[]"
+);
 
 // Get the elements from index.html
 const productsContainer = document.getElementById("products");
@@ -159,6 +162,7 @@ function displayCart() {
 
   cartTotalElement.textContent = total.toFixed(2);
   checkoutButton.disabled = cart.length === 0;
+  sessionStorage.setItem("group9Cart", JSON.stringify(cart));
 }
 
 // 7. Send the actual cart total to checkout
