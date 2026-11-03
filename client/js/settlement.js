@@ -1,57 +1,104 @@
 const params = new URLSearchParams(window.location.search);
 const selectedOrderId = params.get("orderId");
+const form = document.getElementById("settlementForm");
+const orderIdInput = document.getElementById("orderId");
+const amountInput = document.getElementById("finalAmount");
+const submitButton = document.getElementById("settlementSubmitButton");
+const messageBox = document.getElementById("result");
+let inFlight = false;
+let submissionLocked = false;
 
 if (selectedOrderId) {
-    document.getElementById("orderId").value = selectedOrderId;
+    orderIdInput.value = selectedOrderId;
 }
 
-const form = document.getElementById("settlementForm");
+function updateSubmissionState() {
+    const disabled = inFlight || submissionLocked;
+    submitButton.disabled = disabled;
+    orderIdInput.disabled = disabled;
+    amountInput.disabled = disabled;
+    submitButton.textContent = inFlight ? "Submitting settlement..." : "Submit Settlement";
+    form.setAttribute("aria-busy", String(inFlight));
+}
 
-form.addEventListener("submit", function(event) {
+function showUncertainOutcome(detail) {
+    submissionLocked = true;
+    messageBox.textContent = `${detail} The settlement outcome is uncertain. ` +
+        "Verify the order status before attempting another settlement.";
+}
+
+form.addEventListener("submit", async function(event) {
     event.preventDefault();
+    if (inFlight || submissionLocked) return;
 
-    const orderId = document.getElementById("orderId").value;
-    const finalAmount = document.getElementById("finalAmount").value;
+    // Snapshot values before locking the controls or awaiting the request.
+    const orderId = orderIdInput.value.trim();
+    const amountText = amountInput.value.trim();
+    const finalAmount = Number(amountText);
 
-    console.log("Order ID:", orderId);
-    console.log("Final Amount:", finalAmount);
-
-
-    fetch("/api/settlements", {
-    method: "POST",
-    headers: {
-        "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-        orderId: orderId,
-        finalAmount: finalAmount
-    })
-})
-
-.then(async response => {
-    const data = await response.json();
-
-    return {
-        ok: response.ok,
-        status: response.status,
-        data: data
-    };
-})
-.then(result => {
-    const messageBox = document.getElementById("result");
-
-    messageBox.textContent = result.data.message;
-
-    if (!result.ok) {
-        alert(result.data.message);
+    if (!orderId) {
+        messageBox.textContent = "Enter an Order ID.";
+        orderIdInput.focus();
+        return;
+    }
+    if (!amountText || !Number.isFinite(finalAmount) || finalAmount <= 0) {
+        messageBox.textContent = "Enter a settlement amount greater than $0.";
+        amountInput.focus();
+        return;
+    }
+    if (!/^(?:\d+(?:\.\d{0,2})?|\.\d{1,2})$/.test(amountText)) {
+        messageBox.textContent = "Use a decimal amount with no more than two decimal places.";
+        amountInput.focus();
         return;
     }
 
-    alert("Settlement completed successfully.");
-})
+    inFlight = true;
+    updateSubmissionState();
+    messageBox.textContent = "Submitting settlement...";
 
-.catch(error => {
-    console.error("Error:", error);
-});
+    try {
+        const response = await fetch("/api/settlements", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ orderId, finalAmount }),
+        });
+
+        let data = null;
+        try {
+            data = await response.json();
+        } catch {
+            // HTTP 400/404 are definite rejections even if their body is unreadable.
+        }
+        const message = data && typeof data.message === "string" && data.message.trim()
+            ? data.message
+            : null;
+
+        if (response.status === 400 || response.status === 404) {
+            messageBox.textContent = message || (response.status === 404
+                ? "No successful payment authorization was found for this Order ID."
+                : "Settlement rejected. Check the Order ID and amount.");
+            return;
+        }
+        if (!response.ok) {
+            showUncertainOutcome(message || "The server could not confirm the settlement.");
+            return;
+        }
+
+        // The current API has no success boolean. Confirm its documented fields.
+        if (!message || data.orderId !== orderId || !Number.isFinite(data.finalAmount) ||
+            data.finalAmount !== finalAmount || !Number.isFinite(data.authorizedAmount) ||
+            data.authorizedAmount < finalAmount) {
+            showUncertainOutcome("The server returned an unexpected settlement response.");
+            return;
+        }
+
+        submissionLocked = true;
+        messageBox.textContent = message;
+    } catch {
+        showUncertainOutcome("The settlement response could not be received.");
+    } finally {
+        inFlight = false;
+        updateSubmissionState();
+    }
 
 });
