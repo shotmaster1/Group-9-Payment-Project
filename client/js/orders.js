@@ -18,6 +18,35 @@ async function loadOrders() {
     }
 }
 
+function formatAuthorizationExpiration(value) {
+    if (typeof value !== "string") return "N/A";
+
+    // Accept ISO dates and timestamps with an explicit timezone only.
+    const text = value.trim();
+    const match = text.match(/^(\d{4}-\d{2}-\d{2})(?:T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d{1,9})?)?(Z|[+-](\d{2}):(\d{2})))?$/);
+    if (!match) return "N/A";
+
+    // Reject impossible calendar dates that Date would otherwise normalize.
+    const calendarDate = new Date(`${match[1]}T00:00:00Z`);
+    if (Number.isNaN(calendarDate.getTime()) || calendarDate.toISOString().slice(0, 10) !== match[1]) {
+        return "N/A";
+    }
+
+    // Date-only values have no timezone; preserve their original calendar date.
+    if (match[2] === undefined) return match[1];
+
+    const [, , hour, minute, second = "0", , offsetHour = "0", offsetMinute = "0"] = match;
+    if (Number(hour) > 23 || Number(minute) > 59 || Number(second) > 59 ||
+        Number(offsetHour) > 23 || Number(offsetMinute) > 59) {
+        return "N/A";
+    }
+
+    const timestamp = new Date(text);
+    if (Number.isNaN(timestamp.getTime())) return "N/A";
+
+    return timestamp.toISOString().replace("T", " ").replace(/(?:\.000)?Z$/, " UTC");
+}
+
 function renderOrders(orders) {
     const tableBody = document.getElementById("ordersTableBody");
 
@@ -43,6 +72,7 @@ function renderOrders(orders) {
             cardDisplay,
             // Indicate authorization availability without exposing the token.
             order.AuthorizationToken ? "Available" : "N/A",
+            formatAuthorizationExpiration(order.AuthExpirationDate),
         ];
 
         values.forEach((value) => {
