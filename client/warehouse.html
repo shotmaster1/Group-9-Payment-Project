@@ -10,7 +10,7 @@
 
     <h1>Warehouse Settlement</h1>
 
-    <form id="settlementForm">
+    <form id="settlementForm" novalidate aria-busy="false">
 
         <div>
             <label for="orderId">Order ID:</label>
@@ -31,18 +31,18 @@
                 id="finalAmount"
                 name="finalAmount"
                 step="0.01"
-                min="0"
+                min="0.01"
                 required
             >
         </div>
 
         <br>
 
-        <button type="submit">Submit Settlement</button>
+        <button type="submit" id="settlementSubmitButton">Submit Settlement</button>
 
     </form>
 
-    <p id="result"></p>
+    <p id="result" role="status" aria-live="polite"></p>
 
     <script src="js/settlement.js"></script>
 
