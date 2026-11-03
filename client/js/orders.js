@@ -21,34 +21,47 @@ async function loadOrders() {
 function renderOrders(orders) {
     const tableBody = document.getElementById("ordersTableBody");
 
-    tableBody.innerHTML = "";
+    tableBody.replaceChildren();
 
     orders.forEach((order) => {
         const row = document.createElement("tr");
 
-        row.innerHTML = `
-            <td>${order.OrderID}</td>
-            <td>${order.CustomerName || ""}</td>
-            <td>${order.CustomerEmail || ""}</td>
-            <td>$${Number(order.OrderTotal || 0).toFixed(2)}</td>
-            <td>${order.OrderStatus || ""}</td>
-            <td>${order.OrderDate ? new Date(order.OrderDate).toLocaleString() : ""}</td>
-           <td>
-                ${
-                    order.CardType && order.CardLast4
-                        ? `${order.CardType.charAt(0).toUpperCase() + order.CardType.slice(1)} •••• ${order.CardLast4}`
-                        : "N/A"
-                }
-            </td>
-            <td>${order.AuthorizationToken || "N/A"}</td>
-            <td>
-                ${
-                    order.OrderStatus === "Authorized"
-                        ? `<button onclick="openSettlement('${order.OrderID}')">Settle Order</button>`
-                        : "Not Available"
-                }
-            </td>
-        `;
+        // Keep API values in text nodes, never HTML or inline JavaScript.
+        const last4 = String(order.CardLast4 || "");
+        const cardType = String(order.CardType || "");
+        const cardDisplay = cardType && /^\d{4}$/.test(last4)
+            ? `${cardType.charAt(0).toUpperCase() + cardType.slice(1)} •••• ${last4}`
+            : "N/A";
+
+        const values = [
+            order.OrderID,
+            order.CustomerName || "",
+            order.CustomerEmail || "",
+            `$${Number(order.OrderTotal || 0).toFixed(2)}`,
+            order.OrderStatus || "",
+            order.OrderDate ? new Date(order.OrderDate).toLocaleString() : "",
+            cardDisplay,
+            // Indicate authorization availability without exposing the token.
+            order.AuthorizationToken ? "Available" : "N/A",
+        ];
+
+        values.forEach((value) => {
+            const cell = document.createElement("td");
+            cell.textContent = value ?? "";
+            row.appendChild(cell);
+        });
+
+        const actionCell = document.createElement("td");
+        if (order.OrderStatus === "Authorized") {
+            const button = document.createElement("button");
+            button.type = "button";
+            button.textContent = "Settle Order";
+            button.addEventListener("click", () => openSettlement(order.OrderID));
+            actionCell.appendChild(button);
+        } else {
+            actionCell.textContent = "Not Available";
+        }
+        row.appendChild(actionCell);
 
         tableBody.appendChild(row);
     });
