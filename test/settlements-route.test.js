@@ -6,7 +6,6 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const vm = require("node:vm");
-const { execFileSync } = require("node:child_process");
 const { createDatabase } = require("../server/database/database");
 const service = require("../server/services/settlementService");
 const source = fs.readFileSync(path.join(__dirname, "../server/routes/settlements.js"), "utf8");
@@ -131,7 +130,8 @@ function warehouseUI(request) {
     for (const name of ["settlementForm", "orderId", "finalAmount", "settlementSubmitButton", "result"]) {
         nodes[name] = { value: "", disabled: false, textContent: "", attributes: {}, focus() {}, setAttribute(key, value) { this.attributes[key] = value; }, addEventListener(event, callback) { if (event === "submit") onSubmit = callback; } };
     }
-    const frontend = execFileSync("git", ["show", "bassel-dashboard-security:client/js/settlement.js"], { cwd: path.resolve(__dirname, ".."), encoding: "utf8" });
+    // The integrated frontend is unchanged from PR #5; load its tracked source.
+    const frontend = fs.readFileSync(path.join(__dirname, "../client/js/settlement.js"), "utf8");
     vm.runInNewContext(frontend, {
         URLSearchParams,
         window: { location: { search: "?orderId=SYNTHETIC" } },

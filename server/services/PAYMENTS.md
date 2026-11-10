@@ -199,9 +199,11 @@ arithmetic reporting, not proof that funds were released.
 
 The suite retains the original 168 cases and adds gateway, quote, payment transaction,
 checkout and full storefront/dashboard/warehouse journey checks using temporary
-SQLite databases and mocked fetch/DOM. The historical date-only regression pins the
-old handler at integration checkpoint 00d8161; current payment semantics have their
-own tests. Route-composition assertions now verify the mounted reviewed router.
+SQLite databases and mocked fetch/DOM. The historical date-only regression reads
+[an exact archived handler fixture](../../test/fixtures/legacy-server.js.txt);
+current payment semantics have their own tests. Warehouse compatibility tests read
+the integrated frontend directly. Neither regression requires historical Git objects
+or local branch names. Route-composition assertions verify the mounted reviewed router.
 
 Run with already-installed sibling dependencies if this worktree has no node_modules:
 
