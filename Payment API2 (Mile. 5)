@@ -1,0 +1,478 @@
+
+const OAUTH_URL =
+  'https://capstoneproject.proxy.beeceptor.com/oauth/token';
+
+const AUTHORIZE_URL =
+  'https://capstoneproject.proxy.beeceptor.com/authorize';
+
+const REQUEST_TIMEOUT_MS = 10000;
+const TOKEN_REFRESH_SKEW_MS = 30000;
+
+// OAuth tokens are kept in server memory only.
+let cachedToken = null;
+let tokenRequestPromise = null;
+
+/**
+ * Safely parse JSON.
+ */
+function parseResponseBody(text) {
+  if (!text) return {};
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Fetch and read the complete response within 10 seconds.
+ * This includes waiting for the response body.
+ */
+async function fetchWithTimeout(url, options = {}) {
+  const controller = new AbortController();
+
+  const timeout = setTimeout(() => {
+    controller.abort();
+  }, REQUEST_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal
+    });
+
+    const text = await response.text();
+    const data = parseResponseBody(text);
+
+    return {
+      status: response.status,
+      ok: response.ok,
+      data
+    };
+  } catch (error) {
+    if (controller.signal.aborted) {
+      const timeoutError = new Error(
+        'Payment service request timed out'
+      );
+
+      timeoutError.name = 'TimeoutError';
+      throw timeoutError;
+    }
+
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+/**
+ * Determine OAuth token expiry.
+ */
+function getOAuthExpiry(data) {
+  if (
+    typeof data.expires_in === 'number' &&
+    Number.isFinite(data.expires_in) &&
+    data.expires_in > 0
+  ) {
+    return Date.now() + data.expires_in * 1000;
+  }
+
+  const absoluteExpiry =
+    data.expires_at ?? data.expiresAt;
+
+  if (typeof absoluteExpiry === 'string') {
+    const parsed = Date.parse(absoluteExpiry);
+
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Check cached token validity.
+ */
+function isCachedTokenValid() {
+  return Boolean(
+    cachedToken &&
+    cachedToken.expiresAt !== null &&
+    Date.now() + TOKEN_REFRESH_SKEW_MS <
+      cachedToken.expiresAt
+  );
+}
+
+/**
+ * Obtain an OAuth access token.
+ */
+async function getAccessToken() {
+  if (isCachedTokenValid()) {
+    return cachedToken.value;
+  }
+
+  if (tokenRequestPromise) {
+    return tokenRequestPromise;
+  }
+
+  const request = (async () => {
+    const response = await fetchWithTimeout(
+      OAUTH_URL,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          merchantId: process.env.MA_MERCHANT_ID,
+          secretKey: process.env.MA_SECRET_KEY
+        })
+      }
+    );
+
+    if (!response.ok) {
+      const error = new Error(
+        'OAuth token request failed'
+      );
+
+      error.statusCode = response.status;
+      throw error;
+    }
+
+    const data = response.data;
+
+    if (
+      typeof data.access_token !== 'string' ||
+      !data.access_token
+    ) {
+      throw new Error(
+        'OAuth response did not contain access_token'
+      );
+    }
+
+    const expiresAt = getOAuthExpiry(data);
+
+    // Never cache a token with unknown expiry.
+    cachedToken = expiresAt
+      ? {
+          value: data.access_token,
+          expiresAt
+        }
+      : null;
+
+    return data.access_token;
+  })();
+
+  tokenRequestPromise = request;
+
+  try {
+    return await request;
+  } finally {
+    if (tokenRequestPromise === request) {
+      tokenRequestPromise = null;
+    }
+  }
+}
+
+/**
+ * Refresh OAuth token after a 401.
+ */
+async function refreshAccessToken(rejectedToken) {
+  // Another request may already have refreshed the token.
+  if (
+    cachedToken &&
+    cachedToken.value !== rejectedToken &&
+    isCachedTokenValid()
+  ) {
+    return cachedToken.value;
+  }
+
+  if (
+    cachedToken &&
+    cachedToken.value === rejectedToken
+  ) {
+    cachedToken = null;
+  }
+
+  return getAccessToken();
+}
+
+/**
+ * Send authorization request.
+ */
+async function sendAuthorizationRequest(token, payment) {
+  if (typeof token !== 'string' || !token) {
+    throw new Error('Missing OAuth access token');
+  }
+
+  return fetchWithTimeout(AUTHORIZE_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    },
+    body: JSON.stringify({
+      OrderId: payment.orderId,
+      CardDetails: {
+        CardNumber: payment.cardNumber,
+        CardMonth: payment.cardMonth,
+        CardYear: payment.cardYear,
+        CCV: payment.ccv
+      },
+      RequestedAmount: payment.amount
+    })
+  });
+}
+
+/**
+ * Authorize payment.
+ *
+ * A 401 triggers one token refresh and one retry only.
+ * Other errors and timeouts are never automatically retried.
+ */
+async function authorizePayment(payment) {
+  let token = await getAccessToken();
+
+  let response = await sendAuthorizationRequest(
+    token,
+    payment
+  );
+
+  if (response.status === 401) {
+    token = await refreshAccessToken(token);
+
+    response = await sendAuthorizationRequest(
+      token,
+      payment
+    );
+  }
+
+  return response;
+}
+
+/**
+ * Standard payment error response.
+ */
+function paymentError({
+  statusCode = 502,
+  upstreamStatusCode = null,
+  code = 'PAYMENT_ERROR',
+  status = 'Payment Error',
+  message = 'The payment could not be processed.',
+  orderId = null
+} = {}) {
+  return {
+    success: false,
+    statusCode,
+    upstreamStatusCode,
+    code,
+    orderId,
+    status,
+    message,
+    authorizationToken: null,
+    tokenExpirationDate: null,
+    authorizedAmount: 0
+  };
+}
+
+/**
+ * Process payment and map Manhattan Associates response.
+ */
+async function processPayment(payment) {
+  try {
+    const response = await authorizePayment(payment);
+    const data = response.data;
+
+    const orderId =
+      data.OrderId ?? payment.orderId;
+
+    // PAY-01: Successful authorization.
+    // Preserve Manhattan Associates values without modification.
+    if (
+      response.status === 200 &&
+      data.Success === true
+    ) {
+      if (
+        data.AuthorizationToken == null ||
+        data.AuthorizedAmount == null ||
+        data.TokenExpirationDate == null
+      ) {
+        return paymentError({
+          statusCode: 502,
+          upstreamStatusCode: 200,
+          code: 'INCOMPLETE_AUTHORIZATION_RESPONSE',
+          status: 'Invalid Authorization Response',
+          message:
+            'The payment service returned incomplete authorization details.',
+          orderId
+        });
+      }
+
+      return {
+        success: true,
+        statusCode: 200,
+        upstreamStatusCode: 200,
+        code: 'PAYMENT_AUTHORIZED',
+        orderId,
+
+        authorizationToken:
+          data.AuthorizationToken,
+
+        authorizedAmount:
+          data.AuthorizedAmount,
+
+        tokenExpirationDate:
+          data.TokenExpirationDate,
+
+        reason: data.Reason || ''
+      };
+    }
+
+    // PAY-04: HTTP 200 but payment was not authorized.
+    if (
+      response.status === 200 &&
+      data.Success === false
+    ) {
+      return paymentError({
+        statusCode: 402,
+        upstreamStatusCode: 200,
+        code: 'PAYMENT_NOT_AUTHORIZED',
+        status: 'Payment Not Authorized',
+        message:
+          data.Reason ||
+          'The payment service returned an unsuccessful authorization.',
+        orderId
+      });
+    }
+
+    // PAY-03: Invalid payment request.
+    if (response.status === 400) {
+      return paymentError({
+        statusCode: 400,
+        upstreamStatusCode: 400,
+        code: 'INVALID_PAYMENT_REQUEST',
+        status: 'Payment Declined',
+        message:
+          data.Reason ||
+          'The payment information is invalid.',
+        orderId
+      });
+    }
+
+    // PAY-05: Authorization failed after refresh.
+    if (response.status === 401) {
+      return paymentError({
+        statusCode: 401,
+        upstreamStatusCode: 401,
+        code: 'PAYMENT_AUTHORIZATION_FAILED',
+        status: 'Authorization Failed',
+        message:
+          'Payment authorization could not be completed.',
+        orderId
+      });
+    }
+
+    // PAY-04: Insufficient funds.
+    if (response.status === 402) {
+      return paymentError({
+        statusCode: 402,
+        upstreamStatusCode: 402,
+        code: 'INSUFFICIENT_FUNDS',
+        status: 'Payment Declined - Insufficient Funds',
+        message:
+          data.Reason ||
+          'There are insufficient funds to complete the purchase.',
+        orderId
+      });
+    }
+
+    // PAY-04: Payment validation failure.
+    if (response.status === 422) {
+      return paymentError({
+        statusCode: 422,
+        upstreamStatusCode: 422,
+        code: 'PAYMENT_VALIDATION_FAILED',
+        status: 'Payment Validation Failed',
+        message:
+          data.Reason ||
+          'The payment request could not be processed.',
+        orderId
+      });
+    }
+
+    // Payment service server errors.
+    if (response.status >= 500) {
+      console.error(
+        'Payment service server error:',
+        response.status
+      );
+
+      return paymentError({
+        statusCode: 502,
+        upstreamStatusCode: response.status,
+        code: 'PAYMENT_SERVICE_ERROR',
+        status: 'Payment Service Unavailable',
+        message:
+          'The payment service encountered an error. Please try again later.',
+        orderId
+      });
+    }
+
+    return paymentError({
+      statusCode: 502,
+      upstreamStatusCode: response.status,
+      code: 'UNEXPECTED_PAYMENT_RESPONSE',
+      status: 'Payment Error',
+      message:
+        'The payment service returned an unexpected response.',
+      orderId
+    });
+
+  } catch (error) {
+    // Never log card information, OAuth tokens or credentials.
+    console.error(
+      'Payment integration failure:',
+      error.name || 'Error',
+      error.statusCode ?? ''
+    );
+
+    if (error.name === 'TimeoutError') {
+      return paymentError({
+        statusCode: 504,
+        code: 'PAYMENT_TIMEOUT',
+        status: 'Payment Timeout',
+        message:
+          'The payment service did not respond within 10 seconds.',
+        orderId: payment.orderId
+      });
+    }
+
+    if (error.statusCode) {
+      return paymentError({
+        statusCode: 502,
+        upstreamStatusCode: error.statusCode,
+        code: 'OAUTH_TOKEN_REQUEST_FAILED',
+        status: 'Authentication Service Error',
+        message:
+          'Unable to obtain authorization from the payment service.',
+        orderId: payment.orderId
+      });
+    }
+
+    return paymentError({
+      statusCode: 503,
+      code: 'PAYMENT_SERVICE_UNAVAILABLE',
+      status: 'Payment Service Unavailable',
+      message:
+        'Unable to contact the payment service.',
+      orderId: payment.orderId
+    });
+  }
+}
+
+module.exports = {
+  getAccessToken,
+  authorizePayment,
+  processPayment
+};
