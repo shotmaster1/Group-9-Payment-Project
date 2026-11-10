@@ -1,109 +1,61 @@
 const express = require("express");
 const router = express.Router();
 const db = require("../database/db");
+const { createOrderWithItems, OrderError } = require("../services/orderService");
+const { PricingError } = require("../services/pricingService");
+const { listOrders, getOrderDetails, OrderQueryError } = require("../services/orderQueryService");
 
-// POST /api/orders
-router.post("/", (req, res) => {
-  const { orderId, customer, amount } = req.body;
-
-  if (!customer || !customer.firstName || !customer.email || !customer.address) {
-    return res.status(400).json({ success: false, message: "Missing required customer order fields." });
-  }
-
-  const idToUse = orderId || `ORD-${Date.now()}`;
-  const fullName = `${customer.firstName} ${customer.lastName}`.trim();
-  const orderDate = new Date().toISOString();
-  const orderTotal = Number(amount || 0);
-
-  const sql = `
-    INSERT INTO Orders (OrderID, CustomerName, CustomerEmail, ShippingAddress, City, State, Zip, OrderDate, OrderTotal, OrderStatus)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending')
-  `;
-
-  const params = [
-    idToUse,
-    fullName,
-    customer.email,
-    customer.address,
-    customer.city || "",
-    customer.state || "",
-    customer.zip || "",
-    orderDate,
-    orderTotal
-  ];
-
-  db.run(sql, params, function (err) {
-    if (err) {
-      return res.status(500).json({ success: false, message: "Database Error: " + err.message });
-    }
+// POST /api/orders: authoritative pricing and atomic order/item creation.
+router.post("/", async (req, res) => {
+  try {
+    const order = await createOrderWithItems(req.body, { database: db });
     return res.status(201).json({
       success: true,
       message: "Order created successfully.",
-      orderId: idToUse,
-      orderTotal: orderTotal,
-      orderStatus: "Pending"
+      orderId: order.orderId,
+      orderTotal: order.orderTotal,
+      orderStatus: order.orderStatus
     });
-  });
+  } catch (error) {
+    if (error instanceof OrderError) {
+      return res.status(error.statusCode).json({ success: false, message: error.message });
+    }
+    if (error instanceof PricingError) {
+      const serverError = ["INVALID_PRODUCT_PRICE", "INVALID_PRODUCT_NAME", "INVALID_PRODUCT_DATA"].includes(error.code);
+      const status = serverError ? 500 : error.code === "PRODUCT_NOT_FOUND" ? 404 : 400;
+      return res.status(status).json({ success: false, message: error.message });
+    }
+    return res.status(500).json({ success: false, message: "Failed to create order." });
+  }
 });
 
-// GET /api/orders with Filtering, Searching, and Sorting
-router.get("/", (req, res) => {
-  const { status, search, sort } = req.query;
-
-  let query = `
-    SELECT 
-      o.OrderID,
-      o.CustomerName,
-      o.CustomerEmail,
-      o.ShippingAddress,
-      o.City,
-      o.State,
-      o.Zip,
-      o.OrderDate,
-      o.OrderTotal,
-      o.OrderStatus,
-      pa.AuthorizationToken,
-      pa.AuthorizationAmount,
-      pa.TransactionDateTime,
-      pa.AuthExpirationDate,
-      pa.AuthorizationResult,
-      pa.CardType,
-      pa.CardLast4,
-      pa.FailureReason
-    FROM Orders o
-    LEFT JOIN PaymentAuthorizations pa ON o.OrderID = pa.OrderID
-    WHERE 1=1
-  `;
-
-  const params = [];
-
-  if (status) {
-    query += ` AND o.OrderStatus = ?`;
-    params.push(status);
-  }
-
-  if (search) {
-    query += ` AND (o.OrderID LIKE ? OR o.CustomerEmail LIKE ? OR o.CustomerName LIKE ?)`;
-    const searchPattern = `%${search}%`;
-    params.push(searchPattern, searchPattern, searchPattern);
-  }
-
-  if (sort === "oldest") {
-    query += ` ORDER BY o.OrderDate ASC`;
-  } else if (sort === "amount_desc") {
-    query += ` ORDER BY o.OrderTotal DESC`;
-  } else if (sort === "amount_asc") {
-    query += ` ORDER BY o.OrderTotal ASC`;
-  } else {
-    query += ` ORDER BY o.OrderDate DESC`;
-  }
-
-  db.all(query, params, (err, rows) => {
-    if (err) {
-      return res.status(500).json({ success: false, message: "Failed to retrieve orders: " + err.message });
+// GET /api/orders: one row per order, with its highest-ID authorization.
+router.get("/", async (req, res) => {
+  try {
+    const orders = await listOrders(req.query, { database: db });
+    return res.status(200).json({ success: true, count: orders.length, orders });
+  } catch (error) {
+    if (error instanceof OrderQueryError) {
+      return res.status(400).json({ success: false, message: error.message });
     }
-    return res.status(200).json({ success: true, count: rows.length, orders: rows });
-  });
+    return res.status(500).json({ success: false, message: "Failed to retrieve orders." });
+  }
+});
+
+// GET /api/orders/:id: safe, snapshot-based details for the warehouse UI.
+router.get("/:id", async (req, res) => {
+  try {
+    const order = await getOrderDetails(req.params.id, { database: db });
+    if (!order) {
+      return res.status(404).json({ success: false, message: "Order not found." });
+    }
+    return res.status(200).json({ success: true, order });
+  } catch (error) {
+    if (error instanceof OrderQueryError) {
+      return res.status(400).json({ success: false, message: error.message });
+    }
+    return res.status(500).json({ success: false, message: "Failed to retrieve order details." });
+  }
 });
 
 module.exports = router;
