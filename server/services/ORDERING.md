@@ -135,5 +135,5 @@ NODE_PATH=../Group-9-Payment-Project/node_modules npm test
 ```
 
 Stage 5 order-detail/latest-authorization queries are implemented; see [the query
-contract](QUERYING.md). Payment integration and settlement safeguards remain pending.
-Stage 6 has not started.
+contract](QUERYING.md). Stage 6 now provides [settlement safeguards](SETTLEMENTS.md).
+Payment integration remains pending; no later stage has started.

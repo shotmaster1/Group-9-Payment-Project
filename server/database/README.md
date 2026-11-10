@@ -166,5 +166,6 @@ project database, application server, payment service, or settlement endpoint is
 Stage 3 now provides a cent-based pricing service; see [the pricing interface](../services/PRICING.md).
 Stage 4 now provides [transactional order creation](../services/ORDERING.md) and uses
 it for POST `/api/orders`. Stage 5 now provides [order queries and details](../services/QUERYING.md),
-including one highest-ID authorization per order. Payment safety and settlement
-eligibility remain later work; the payment endpoint is unchanged.
+including one highest-ID authorization per order. Stage 6 now provides
+[atomic settlement safeguards](../services/SETTLEMENTS.md) using the same transaction
+helpers and unchanged schema. Payment integration remains pending; its endpoint is unchanged.
