@@ -392,7 +392,7 @@ test("existing payment adapter and handler can authorize date-only expirations t
                 if (name === "cors") return () => () => {};
                 if (name === "path") return path;
                 if (name === "./database/db") return db;
-                if (["./routes/orders", "./routes/settlements"].includes(name)) return {};
+                if (["./routes/orders", "./routes/settlements", "./routes/products"].includes(name)) return {};
                 if (name === "../Payment API") return adapter.exports;
                 if (name === path.resolve(__dirname, "../client/js/validation.js")) return { validateCardNumber: () => ({ valid: true }) };
                 throw new Error("Unexpected legacy handler dependency: " + name);
