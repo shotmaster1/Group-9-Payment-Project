@@ -2,7 +2,7 @@
 
 const defaultDatabase = require("../database/db");
 const { MoneyError, toCents, fromCents } = require("./moneyService");
-const { expirationNanoseconds: parseExpiration, AuthorizationExpirationError } = require("./authorizationExpiration");
+const { manhattanAuthorizationExpiration, AuthorizationExpirationError } = require("./authorizationExpiration");
 
 class SettlementError extends Error {
     constructor(code, message, statusCode = 400, details = {}) {
@@ -41,7 +41,7 @@ function prepareRequest(input) {
 }
 
 function expirationNanoseconds(value) {
-    try { return parseExpiration(value); }
+    try { return manhattanAuthorizationExpiration(value).nanoseconds; }
     catch (error) {
         if (!(error instanceof AuthorizationExpirationError)) throw error;
         throw new SettlementError(error.code, error.message);

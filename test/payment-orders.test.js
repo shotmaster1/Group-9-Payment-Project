@@ -104,7 +104,7 @@ test("exact-match policy preserves different actual approval amounts for review 
 });
 
 test("date-only, missing, malformed and expired approvals remain blocked without invented expiration", async t => {
-    for (const expiration of ["2030-01-08", null, "", "2030-01-08T12:00:00", "2030-02-30T12:00:00Z", "2030-01-01T12:00:00Z"]) {
+    for (const expiration of ["2030-01-08", null, "", "2030-01-08T12:00", "2030-02-30T12:00:00Z", "2030-01-01T12:00:00Z"]) {
         const f = fixture(t, { body: { TokenExpirationDate: expiration } });
         const response = await f.api("POST", "/", await f.payload());
         assert.equal(response.body.success, false); assert.equal(response.body.outcome, "uncertain");

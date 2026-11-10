@@ -125,9 +125,13 @@ For the future warehouse display, read the recorded authorization amount from
 and use AuthorizationResult and AuthExpirationDate from that same object.
 A stored amount on a declined record does not mean funds were approved; do not
 fall back to an older success or treat the display as settlement authorization.
-The endpoint reports stored date strings unchanged, including date-only values,
-timezones and NULL expiration dates. It does not infer missing expiration dates
-or compute expiry/eligibility; the settlement backend must enforce safeguards.
+The collection and detail endpoint return recognized authorization timestamps in
+UTC using the shared Manhattan mock policy, including the approved UTC assumption
+for full timezone-free timestamps. Stored SQLite strings are never rewritten.
+Unsupported historical values (including date-only values and NULL) remain as stored
+for display; their presence never implies settlement eligibility. These queries do
+not fill missing dates, change order statuses or compute expiry/eligibility; the
+settlement backend enforces all safeguards.
 
 The detail response uses explicit SQL column projections, never SELECT *.
 It excludes AuthorizationToken, all card fields (including CardLast4/CardType),

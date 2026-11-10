@@ -15,12 +15,13 @@ The harness intercepts Express startup, dotenv loading, validation, database acc
 and gateway transport. All records and gateway responses are synthetic; no listener,
 real credentials, project database or external requests are used by this regression.
 
-Coverage remains unchanged: date-only, missing, null, blank and timezone-free provider
-expirations are preserved as historically stored and rejected for settlement.
-Explicit UTC and offset timestamps remain accepted with $20 unused authorization
-on a $100 authorization settled for $80. Rejected settlements leave records intact.
-Current payment behavior is covered separately and retains the strict expiration
-policy and removal of fake-success fallbacks.
+The historical scenarios retain their exact stored expiration values and assertions
+about preservation. Date-only, missing, null and blank values remain rejected.
+Full timezone-free timestamps now settle under the explicitly approved Manhattan
+mock UTC assumption, alongside explicit UTC/offset timestamps. Accepted settlements
+report $20 unused on a $100 authorization settled for $80; rejected settlements leave
+records intact. Current payment behavior has separate coverage for malformed/expired
+values, UTC normalization, and continued removal of fake-success fallbacks.
 
 The warehouse compatibility tests read client/js/settlement.js from the current
 source tree. Its contents matched PR #5 byte-for-byte when removing the old branch

@@ -3,7 +3,7 @@
 const { createOrderWithItems, OrderError } = require("./orderService");
 const { validateCart, PricingError } = require("./pricingService");
 const { MoneyError, toCents, fromCents } = require("./moneyService");
-const { expirationNanoseconds } = require("./authorizationExpiration");
+const { manhattanAuthorizationExpiration } = require("./authorizationExpiration");
 const { QuoteError } = require("./paymentQuoteService");
 const validation = require("../../client/js/validation");
 
@@ -59,7 +59,12 @@ function decision(result, order, request, currentTime) {
             record.token = null;
             code = "INVALID_AUTHORIZATION_TOKEN";
         }
-        try { if (BigInt(currentTime) * 1000000n >= expirationNanoseconds(record.expiry)) code = "AUTHORIZATION_EXPIRED"; }
+        let normalizedExpiration;
+        try {
+            const expiration = manhattanAuthorizationExpiration(record.expiry);
+            normalizedExpiration = expiration.utc;
+            if (BigInt(currentTime) * 1000000n >= expiration.nanoseconds) code = "AUTHORIZATION_EXPIRED";
+        }
         catch { code = "INVALID_AUTHORIZATION_EXPIRATION"; }
         if (amountCents !== order.totalCents) code = "AUTHORIZED_AMOUNT_MISMATCH";
         if (result.success !== true && !code) code = "INCOMPLETE_AUTHORIZATION_RESPONSE";
@@ -71,7 +76,7 @@ function decision(result, order, request, currentTime) {
         }
         return { statusCode: 200, body: { success: true, outcome: "approved", code: "PAYMENT_AUTHORIZED", status: "Authorized",
             message: "Payment authorized successfully.", orderId: order.orderId, orderTotal: order.orderTotal,
-            authorizedAmount: amount, expirationDate: record.expiry }, record };
+            authorizedAmount: amount, expirationDate: normalizedExpiration }, record };
     }
     if (result.success === false && ["declined", "rejected"].includes(result.outcome)) {
         const insufficient = result.code === "INSUFFICIENT_FUNDS";

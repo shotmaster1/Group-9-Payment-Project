@@ -133,7 +133,8 @@ safe rejection. Errors do not expose raw provider reasons, SQLite errors or secr
 5. Return success only after that transaction commits.
 
 The approval must explicitly identify the same Order ID and include a usable token,
-positive precise amount, and unexpired explicit-timezone expiration. Tokens with
+positive precise amount, and an unexpired expiration accepted by the Manhattan
+mock authorization policy. Tokens with
 whitespace/control characters or excessive length are not accepted or stored.
 No fallback values replace missing fields.
 
@@ -156,12 +157,21 @@ return uncertainty and never resend automatically. A rollback failure invokes th
 existing connection quarantine; do not silently reopen or replay the operation.
 Orders needing review remain blocked by the existing settlement status check.
 
-## Expiration policy remains strict
+## Manhattan mock expiration compatibility
 
-Payments and settlements share [the unchanged Stage 6 parser](SETTLEMENTS.md).
-Date-only, timezone-free, missing, impossible or expired values never become a
-usable payment approval. Explicit-zone timestamps must satisfy now < expiration;
-equality is expired. No timezone or end-of-day meaning is invented.
+Payments and settlements share [the authorization policy](SETTLEMENTS.md).
+The owner-approved mock-only assumption treats a valid full timezone-free timestamp
+such as 2027-03-31T00:00:00.000 as UTC. Seconds are required; a fractional part may
+contain 1–9 digits. Explicit-zone timestamps retain their actual instant. Date-only,
+missing, blank, malformed, impossible or expired values remain unusable.
+Validity requires now < expiration; equality is expired. OAuth expiry parsing stays
+strict and does not inherit this authorization-only compatibility rule.
+
+SQLite retains the provider's exact original string. The successful payment response
+returns normalized UTC in expirationDate, allowing the existing checkout guard and
+cart-clearing rules to operate unchanged. No migration or historical status update
+occurs; existing Payment Review orders remain held. The assumption is a local mock
+test convention, not a claim that the provider confirmed UTC.
 
 A provider may already have authorized funds even when its expiration is unusable.
 Such an order is Payment Review, not a confirmed checkout success or an invented

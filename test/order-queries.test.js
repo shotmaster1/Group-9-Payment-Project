@@ -137,14 +137,14 @@ test("historical orders remain itemless and keep their original totals and recor
     assert.equal((await db.getAsync("SELECT COUNT(*) AS count FROM OrderItems")).count, 0);
 });
 
-test("details select latest authorization with its actual stored amount and exact expiration", async t => {
+test("details select latest authorization with its actual stored amount and UTC expiration", async t => {
     const db = fixture(t);
     await order(db, "LATEST", { total: 999 });
     await authorization(db, "LATEST", { amount: 999, date: "2099-01-01", expiry: "2099-01-08" });
     const id = await authorization(db, "LATEST", { amount: 87.65, date: "2020-01-01T10:20:30Z", expiry: "2030-02-03T12:30:00-05:00" });
     assert.deepEqual((await getOrderDetails("LATEST", { database: db })).LatestAuthorization, {
         AuthorizationID: id, AuthorizationAmount: 87.65, TransactionDateTime: "2020-01-01T10:20:30Z",
-        AuthExpirationDate: "2030-02-03T12:30:00-05:00", AuthorizationResult: "Success"
+        AuthExpirationDate: "2030-02-03T17:30:00Z", AuthorizationResult: "Success"
     });
 });
 

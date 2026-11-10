@@ -1,47 +1,47 @@
 # Settlement safeguards — Stage 6
 
-## Authorization expiration policy (agreed before implementation)
+## Manhattan mock authorization expiration policy
 
-The existing AuthExpirationDate column is TEXT and the payment producer has stored
-both date-only values (for example 2028-12-31) and timestamps. Neither the schema
-nor producer defines a timezone or cutoff for a date-only expiration.
+The owner-approved capstone mock compatibility rule accepts valid full ISO timestamps
+without a timezone, such as 2027-03-31T00:00:00.000, using UTC as a documented local
+assumption. A full timestamp requires seconds and optionally 1–9 fractional digits.
+This is not a verified statement of the provider's timezone contract and must not be
+applied to other providers or OAuth token caching.
 
-The project owner explicitly chose to **reject date-only expirations until the
-gateway contract defines their meaning**. Stage 6 does not interpret these values
-as midnight or end-of-day in any timezone, repair them, or invent a replacement.
-The real database is not changed; integrated payments reuse this same policy.
+Explicit Z/offset timestamps keep their stated instant. Date-only values such as
+2028-12-31 remain rejected, along with missing, blank, malformed, incomplete,
+impossible-calendar and expired values. No midnight or end-of-day interpretation
+is assigned to a date-only value. The generic expirationNanoseconds parser remains
+strict; the separately named Manhattan authorization resolver applies compatibility.
 
-Accepted expiration values must be valid ISO calendar timestamps with an explicit
-`Z` or `+HH:MM` / `-HH:MM` timezone. Missing, blank, malformed, impossible-calendar,
-timezone-free, and date-only values are definite settlement rejections (HTTP 400).
-The parser will not rely on Date.parse normalizing invalid calendar dates.
+An authorization is usable only when now < expiresAt; equality is expired.
+Calendar validation and comparisons preserve nanosecond precision and never depend
+on the machine's timezone. Payment and settlement validate inside their existing
+transactions after waiting for the database lock. SettlementDate uses the same
+backend clock reading.
 
-An authorization is valid only when the backend clock is strictly before its
-expiration instant: `now < expiresAt`. Equality is expired. Offsets are converted
-to the same UTC instant; the host timezone never determines validity. The check
-occurs inside the settlement transaction immediately before persistence, after
-waiting for its database lock. SettlementDate is a UTC ISO timestamp from that
-same clock reading. Dates and timestamps are never rewritten in stored history.
+The exact provider string remains in SQLite AuthExpirationDate. Payment responses
+and recognized order-list/detail expiration values are normalized to UTC for the
+unchanged checkout/dashboard frontend. Unsupported historical display values remain
+as stored and never establish eligibility. No migration or historical rewrite occurs.
 
-## Payment expiration compatibility limitation
+## Existing approvals and review orders
 
-The integrated [payment workflow](PAYMENTS.md) now shares the same strict parser.
-An otherwise reported approval with a date-only, missing, timezone-free or invalid
-expiration is held as Payment Review and is not reported as a completed checkout.
-Actual usable returned amounts/metadata are retained where safe; no date is invented.
-The warehouse rejects review orders because they are not Authorized.
+An otherwise reported approval with an unusable expiration remains Payment Review.
+Actual usable returned metadata is preserved; no replacement expiration is invented.
+Warehouse settlement still requires Authorized status and the latest successful
+authorization. Existing Payment Review orders remain unchanged even when their raw
+timestamp is now interpretable. Queries never promote orders; record correction
+would require separate review and authorization, without repeating the gateway call.
 
-Historical records from the old handler can still contain date-only values or its
-invented 2028-12-31 fallback. They remain ineligible; they are never repaired or
-backfilled automatically. The regression test pins that old handler at checkpoint
-00d8161 to preserve historical-data coverage, while separate tests cover the new
-reviewed payment router and approval validation.
+Historical date-only records and the old handler's invented 2028-12-31 fallback
+remain ineligible. The regression reads an immutable archived test fixture and
+preserves historical records while applying the explicitly approved full-timestamp
+rule. It requires no Git history or local branches.
 
-The real gateway's usual expiration format has not been verified with a live
-request. A normal workflow would remain blocked if the provider only returned
-date-only expirations. Confirm the provider contract and obtain explicit approval
-before changing this policy. The real database and root Quentin source files are
-not modified. No release/refund/capture is implemented.
+The observed external mock approval used a timezone-free full timestamp. No external
+request is made by this compatibility change or its tests. The real database and
+Quentin's gateway source are untouched. No release/refund/capture is implemented.
 
 ## POST /api/settlements
 

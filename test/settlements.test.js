@@ -145,9 +145,9 @@ test("invalid stored authorization amounts are rejected without writing", async 
     }
 });
 
-test("missing, malformed, date-only and timezone-free expirations are rejected", async t => {
+test("missing, malformed, date-only and incomplete timezone-free expirations are rejected", async t => {
     const db = fixture(t).open();
-    const values = [null, "", " ", "2030-01-02", "2030-01-01T12:00:01", "2030-01-01 12:00:01Z", "01/02/2030", "tomorrow", " 2030-01-02T00:00:00Z", "2030-01-02T00:00:00Z ", "2030-01-02T00:00:00z", "2030-01-01T12:00:00.1234567890Z"];
+    const values = [null, "", " ", "2030-01-02", "2030-01-01T12:00", "2030-01-01 12:00:01Z", "01/02/2030", "tomorrow", " 2030-01-02T00:00:00Z", "2030-01-02T00:00:00Z ", "2030-01-02T00:00:00z", "2030-01-01T12:00:00.1234567890Z"];
     for (const [index, expiration] of values.entries()) {
         const id = "BAD-EXP-" + index; await seed(db, id, { expiration });
         await assert.rejects(settleOrder(request(id), options(db)), errorCode("INVALID_EXPIRATION"));
@@ -354,7 +354,7 @@ test("historical payment adapter and handler can authorize date-only expirations
         [1, undefined, false],
         [2, null, false],
         [3, "", false],
-        [4, "2030-01-02T00:00:00", false],
+        [4, "2030-01-02T00:00:00", true],
         [5, "2030-01-02T00:00:00Z", true],
         [6, "2030-01-01T19:00:00-05:00", true]
     ]) {

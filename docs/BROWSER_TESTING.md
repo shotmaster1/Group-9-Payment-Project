@@ -109,9 +109,10 @@ Clicks, Enter and reload must not submit another payment. Settlement must be
 rejected. Do not clear an uncertain attempt marker to bypass the lock.
 
 All synthetic approvals expire seven days after creation using explicit UTC
-timestamps. The strict payment/settlement expiration policy is unchanged:
-date-only or otherwise ambiguous expirations are not accepted. This launcher does
-not claim to establish the real gateway's expiration contract.
+timestamps. Payments and settlement also accept valid full timezone-free timestamps
+under the approved Manhattan mock UTC assumption; date-only values remain rejected.
+Raw database history is preserved. This launcher does not establish the provider's
+actual timezone contract.
 
 ## Stop
 

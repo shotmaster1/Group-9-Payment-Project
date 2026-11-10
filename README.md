@@ -8,8 +8,9 @@ and the six-stage SQLite/backend recovery implementation.
 
 The code on **bassel-system-integration** now connects server-priced checkout to one
 reviewed payment client adapted from Quentin's Payment API2 (33ee567). Orders/items
-and authorization/status updates use managed transactions. The strict expiration
-policy and warehouse safeguards remain in force. This is a capstone prototype:
+and authorization/status updates use managed transactions. Authorization expiration
+checks and warehouse safeguards remain in force, with a documented Manhattan mock
+UTC assumption for full timestamps that omit a timezone. This is a capstone prototype:
 synthetic automated verification does not establish live gateway readiness.
 
 The original storefront/dashboard/recovery branches and PR #4/#5 are separate source
@@ -191,10 +192,12 @@ external capture is implemented or implied.
 
 ## Known limitations and remaining verification
 
-- The gateway's usual expiration format, actual credential acceptance, card-year
-  convention and live provider behavior remain unverified. No live payment request
-  was made. Date-only/missing/timezone-free expirations remain rejected; never append
-  a timezone or invent a cutoff without an explicitly approved provider policy.
+- One external capstone mock approval returned a full timezone-free timestamp. The
+  approved mock-only policy interprets that form as UTC, preserves the exact value
+  in SQLite, and returns UTC timestamps to clients. Date-only, missing, malformed
+  and expired authorizations remain unusable. See [the policy](server/services/SETTLEMENTS.md).
+  This is our documented test convention, not a verified provider timezone contract;
+  the complete external workflow still requires a separately approved retest.
 - Exact-match approvals alone complete checkout. Different approved amounts or
   unusable metadata retain actual usable data, set Payment Review and keep the cart.
   Unknown transport results and post-approval database failures require manual

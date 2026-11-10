@@ -1,6 +1,18 @@
 "use strict";
 
 const defaultDatabase = require("../database/db");
+const { manhattanAuthorizationExpiration, AuthorizationExpirationError } = require("./authorizationExpiration");
+
+function publicAuthorization(authorization) {
+    if (!authorization) return authorization;
+    try {
+        return { ...authorization, AuthExpirationDate: manhattanAuthorizationExpiration(authorization.AuthExpirationDate).utc };
+    } catch (error) {
+        if (!(error instanceof AuthorizationExpirationError)) throw error;
+        // Preserve unsupported historical display values; reads never infer eligibility.
+        return authorization;
+    }
+}
 
 const orderColumns = `
     o.OrderID, o.CustomerName, o.CustomerEmail, o.ShippingAddress,
@@ -52,7 +64,7 @@ async function listOrders(filters = {}, { database = defaultDatabase } = {}) {
     };
     const ordering = Object.hasOwn(sorting, sort) ? sorting[sort] : "o.OrderDate DESC";
     sql += ` ORDER BY ${ordering}, o.OrderID ASC`;
-    return database.allAsync(sql, params);
+    return (await database.allAsync(sql, params)).map(publicAuthorization);
 }
 
 async function getOrderDetails(orderId, { database = defaultDatabase } = {}) {
@@ -77,7 +89,7 @@ async function getOrderDetails(orderId, { database = defaultDatabase } = {}) {
         const settlements = await tx.all(`
             SELECT SettlementID, OrderID, FinalShipmentAmount, SettlementDate, SettlementResult
             FROM Settlements WHERE OrderID = ? ORDER BY SettlementID DESC`, [orderId]);
-        return { ...order, Items: items, LatestAuthorization: authorization || null, Settlements: settlements };
+        return { ...order, Items: items, LatestAuthorization: publicAuthorization(authorization) || null, Settlements: settlements };
     });
 }
 
