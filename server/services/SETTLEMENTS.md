@@ -9,7 +9,7 @@ nor producer defines a timezone or cutoff for a date-only expiration.
 The project owner explicitly chose to **reject date-only expirations until the
 gateway contract defines their meaning**. Stage 6 does not interpret these values
 as midnight or end-of-day in any timezone, repair them, or invent a replacement.
-The real database and payment integration are not changed.
+The real database is not changed; integrated payments reuse this same policy.
 
 Accepted expiration values must be valid ISO calendar timestamps with an explicit
 `Z` or `+HH:MM` / `-HH:MM` timezone. Missing, blank, malformed, impossible-calendar,
@@ -25,50 +25,23 @@ same clock reading. Dates and timestamps are never rewritten in stored history.
 
 ## Payment expiration compatibility limitation
 
-Static inspection of the currently loaded payment path shows that date-only values
-can reach settlement without being rejected during authorization:
+The integrated [payment workflow](PAYMENTS.md) now shares the same strict parser.
+An otherwise reported approval with a date-only, missing, timezone-free or invalid
+expiration is held as Payment Review and is not reported as a completed checkout.
+Actual usable returned amounts/metadata are retained where safe; no date is invented.
+The warehouse rejects review orders because they are not Authorized.
 
-- server/server.js:13 loads the root `Payment API` module. Its processPayment
-  success mapping at Payment API:314 passes `data.TokenExpirationDate` through as
-  tokenExpirationDate without enforcing a timestamp/timezone. It can therefore
-  return a date-only value if the provider supplies one.
-- server/server.js:126 uses `authResultData.tokenExpirationDate || "2028-12-31"`.
-  Missing, NULL, or empty expiration values become this ambiguous date-only fallback.
-- server/server.js:136 stores that value unchanged in AuthExpirationDate, and
-  server/server.js:148 returns it as expirationDate. The handler can still report
-  Authorized even though Stage 6 will reject that record for settlement.
+Historical records from the old handler can still contain date-only values or its
+invented 2028-12-31 fallback. They remain ineligible; they are never repaired or
+backfilled automatically. The regression test pins that old handler at checkpoint
+00d8161 to preserve historical-data coverage, while separate tests cover the new
+reviewed payment router and approval validation.
 
-| Provider expiration / application path | Stored expiration | Stage 6 result, assuming other eligibility checks pass |
-| --- | --- | --- |
-| `2030-01-02T00:00:00Z` | Same timestamp | Accepted only before that instant |
-| `2030-01-01T19:00:00-05:00` | Same timestamp | Accepted only before that same UTC instant |
-| `2030-01-02` | Same date-only text | HTTP 400; no settlement or status change |
-| Missing, NULL, or empty | Legacy fallback `2028-12-31` | HTTP 400; no settlement or status change |
-| Timestamp without a timezone | Same ambiguous text | HTTP 400; no settlement or status change |
-
-**Workflow impact:** normal authorization-to-settlement is blocked whenever an
-otherwise successful authorization supplies a date-only expiration, or the current
-server uses its missing-expiration fallback. Authorization can succeed while the
-subsequent warehouse settlement is rejected. A valid future explicit-timezone
-timestamp remains supported. These are conditional code-path findings, not a
-claim that the live gateway normally returns date-only values.
-
-No authoritative provider expiration-format/cutoff contract or captured live
-response was verified in this inspection. No live payment request was made and
-no historical database records were read, so the provider's usual format and the
-number of affected existing orders remain unverified. The server's initial fake
-success default at server/server.js:97 contains a zoned timestamp; it must not be
-used as a workaround or treated as evidence of genuine authorization.
-
-Mocked regression checks execute the existing payment adapter and unchanged legacy
-payment handler with synthetic provider responses and temporary SQLite fixtures,
-then exercise settlement. Startup/listening, environment loading, and card validation
-are intercepted; no real card data or credentials are used. This confirms pass-through, missing-value fallback,
-400 rejection without writes, and continued support for explicit-timezone values.
-The adapter, payment handler, real database, and approved Stage 6 policy are not
-changed. Confirm the provider's date-only timezone and cutoff with the gateway/team
-before requesting any policy change; do not append a timezone, invent a cutoff,
-or repair old records automatically. Quentin's Payment API2 remains untouched.
+The real gateway's usual expiration format has not been verified with a live
+request. A normal workflow would remain blocked if the provider only returned
+date-only expirations. Confirm the provider contract and obtain explicit approval
+before changing this policy. The real database and root Quentin source files are
+not modified. No release/refund/capture is implemented.
 
 ## POST /api/settlements
 
@@ -205,10 +178,8 @@ NODE_PATH=../Group-9-Payment-Project/node_modules npm test
 ```
 
 The real ecommerce.db is never opened or migrated. No dependencies are added.
-Payment integration and Quentin's newly pushed Payment API2 are not modified.
-The existing payment handler still has its documented amount/fallback/persistence
-issues: these safeguards validate stored records, not the authenticity of a gateway
-approval. Payment integration must persist the actual approved amount and trustworthy
-expiration before end-to-end settlement behavior can be certified. Date-only records
-remain ineligible until that contract is defined. Frontend integration/display of
-unused amounts remains separate work. No later stage has started.
+The reviewed [payment workflow](PAYMENTS.md) now prices orders and persists actual
+validated results before returning success. Root Quentin source files remain
+unchanged, and live provider behavior remains unverified. Date-only records remain
+ineligible until the provider contract is defined and a policy change approved.
+Frontend display of unused amounts and manual reconciliation remain separate work.

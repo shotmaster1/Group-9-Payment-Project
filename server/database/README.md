@@ -168,4 +168,6 @@ Stage 4 now provides [transactional order creation](../services/ORDERING.md) and
 it for POST `/api/orders`. Stage 5 now provides [order queries and details](../services/QUERYING.md),
 including one highest-ID authorization per order. Stage 6 now provides
 [atomic settlement safeguards](../services/SETTLEMENTS.md) using the same transaction
-helpers and unchanged schema. Payment integration remains pending; its endpoint is unchanged.
+helpers and unchanged schema. The integrated [checkout/payment workflow](../services/PAYMENTS.md)
+now uses these helpers for quoted order creation and atomic result persistence.
+No additional schema migration or real database access was needed for that integration.

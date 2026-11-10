@@ -343,10 +343,12 @@ test("service import is lazy and default settlement uses only an explicit synthe
 });
 
 
-test("existing payment adapter and handler can authorize date-only expirations that Stage 6 rejects", async t => {
+test("historical payment adapter and handler can authorize date-only expirations that Stage 6 rejects", async t => {
     const db = fixture(t).open();
     const adapterSource = fs.readFileSync(path.resolve(__dirname, "../Payment API"), "utf8");
-    const serverSource = fs.readFileSync(path.resolve(__dirname, "../server/server.js"), "utf8");
+    // Preserve historical-record compatibility coverage against the immutable
+    // pre-payment-integration handler; new routes have separate current-flow tests.
+    const serverSource = require("node:child_process").execFileSync("git", ["show", "00d8161:server/server.js"], { cwd: path.resolve(__dirname, ".."), encoding: "utf8" });
     for (const [index, providerExpiration, accepted] of [
         [0, "2030-01-02", false],
         [1, undefined, false],

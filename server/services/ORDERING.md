@@ -115,9 +115,9 @@ such an order remains a later payment decision.
 Stage 5 now provides [order queries and details](QUERYING.md). GET `/api/orders`
 preserves its envelope, PascalCase fields and query parameters while selecting only
 the highest-ID authorization per order. GET `/api/orders/:id` returns safe related
-records. The existing POST `/api/payments` handler is also
-unchanged and still has its previously documented legacy amount/upsert/fallback
-problems. Stage 4 does not secure that separate payment endpoint.
+records. The integrated [payment handler](PAYMENTS.md) now reuses this helper with
+a caller-owned transaction, verifies a server quote, and calls the gateway only
+after order creation commits. It does not precreate/recreate an existing order.
 
 ## Verification
 
@@ -136,4 +136,5 @@ NODE_PATH=../Group-9-Payment-Project/node_modules npm test
 
 Stage 5 order-detail/latest-authorization queries are implemented; see [the query
 contract](QUERYING.md). Stage 6 now provides [settlement safeguards](SETTLEMENTS.md).
-Payment integration remains pending; no later stage has started.
+The integrated [checkout/payment workflow](PAYMENTS.md) reuses these services;
+live gateway verification remains pending.

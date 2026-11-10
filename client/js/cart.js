@@ -1,9 +1,12 @@
 
 let products = [];
+let catalogReady = false;
 
-let cart = JSON.parse(
-  sessionStorage.getItem("group9Cart") || "[]"
-);
+let cart = [];
+try {
+  const saved = JSON.parse(sessionStorage.getItem("group9Cart") || "[]");
+  if (Array.isArray(saved)) cart = saved.filter(item => item && Number.isSafeInteger(item.ProductID) && item.ProductID > 0 && Number.isInteger(item.quantity) && item.quantity > 0 && item.quantity <= 999);
+} catch { /* Invalid saved carts cannot become payment requests. */ }
 
 // Get the elements from index.html
 const productsContainer = document.getElementById("products");
@@ -21,8 +24,15 @@ async function loadProducts() {
       throw new Error("Failed to load products");
     }
 
+    if (!Array.isArray(data.products)) throw new Error("Invalid product response");
     products = data.products;
+    cart = cart.map(item => {
+      const product = products.find(product => product.ProductID === item.ProductID);
+      return product ? { ...product, quantity: item.quantity } : item;
+    });
+    catalogReady = true;
     displayProducts();
+    displayCart();
 
   } catch (error) {
     console.error("Product loading error:", error);
@@ -112,7 +122,12 @@ function removeFromCart(productId) {
 
 // 6. Display cart items and calculate the total
 function displayCart() {
-  cartItemsContainer.innerHTML = "";
+  if (!catalogReady) {
+    checkoutButton.disabled = true;
+    cartTotalElement.textContent = "—";
+    return;
+  }
+  cartItemsContainer.replaceChildren();
 
   if (cart.length === 0) {
     cartItemsContainer.textContent = "Your cart is empty.";
@@ -162,20 +177,17 @@ function displayCart() {
 
   cartTotalElement.textContent = total.toFixed(2);
   checkoutButton.disabled = cart.length === 0;
-  sessionStorage.setItem("group9Cart", JSON.stringify(cart));
+  try { sessionStorage.setItem("group9Cart", JSON.stringify(cart)); }
+  catch {
+    checkoutButton.disabled = true;
+    cartItemsContainer.textContent = "Your browser could not save the cart. Check storage settings before checkout.";
+  }
 }
 
-// 7. Send the actual cart total to checkout
+// Checkout obtains its authoritative quote from the server, never the URL.
 checkoutButton.addEventListener("click", () => {
-  const total = cart.reduce(
-    (sum, item) => sum + Number(item.Price) * item.quantity,
-    0
-  );
-
-  if (cart.length === 0 || total <= 0) return;
-
-  window.location.href =
-    `checkout.html?amount=${total.toFixed(2)}`;
+  if (!catalogReady || cart.length === 0) return;
+  window.location.href = "checkout.html";
 });
 
 // Initialize the storefront

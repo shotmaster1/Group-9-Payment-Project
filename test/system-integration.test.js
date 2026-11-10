@@ -60,7 +60,7 @@ test("integrated catalog preserves its safe database-failure response", async t 
 
 test("combined server retains existing routes and mounts the storefront catalog without starting a listener", () => {
     const mounted = [], gets = new Map(), posts = new Map(), staticPaths = [], loaded = [];
-    const routeMarkers = new Map(["orders", "settlements", "products"].map(name => ["./routes/" + name, { name }]));
+    const routeMarkers = new Map(["orders", "settlements", "products", "payments"].map(name => ["./routes/" + name, { name }]));
     let startupCalls = 0;
     const app = {
         use(...args) { mounted.push(args); },
@@ -80,18 +80,19 @@ test("combined server retains existing routes and mounts the storefront catalog 
         if (name === "path") return path;
         if (name === "./database/db") return {};
         if (routeMarkers.has(name)) return routeMarkers.get(name);
-        if (name === "../Payment API") return { processPayment() { throw new Error("Payment must not run during route inspection"); } };
+
         if (name === path.join(project, "client/js/validation.js")) return {};
         throw new Error("Unexpected server dependency: " + name);
     }, path.join(project, "server"), { env: {} }, { log() {}, error() {} });
     assert.deepEqual(mounted.filter(args => typeof args[0] === "string").map(args => [args[0], args[1].name]), [
-        ["/api/orders", "orders"], ["/api/settlements", "settlements"], ["/api/products", "products"]
+        ["/api/orders", "orders"], ["/api/settlements", "settlements"], ["/api/products", "products"], ["/api/payments", "payments"]
     ]);
     assert.equal(typeof gets.get("/api/test"), "function");
-    assert.equal(typeof posts.get("/api/payments"), "function");
+    assert.equal(posts.has("/api/payments"), false); // Payment handlers belong to the mounted reviewed router.
     assert.deepEqual(staticPaths, [path.join(project, "client")]);
     assert.equal(startupCalls, 1); // Intercepted; no real listener exists.
-    assert.ok(loaded.includes("../Payment API"));
+    assert.ok(loaded.includes("./routes/payments"));
+    assert.ok(!loaded.includes("../Payment API"));
     assert.ok(!loaded.some(name => name.includes("Payment API2")));
     for (const name of ["index.html", "checkout.html", "orders.html", "warehouse.html"]) {
         const filename = path.join(project, "client", name);

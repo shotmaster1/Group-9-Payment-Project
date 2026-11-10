@@ -185,4 +185,5 @@ NODE_PATH=../Group-9-Payment-Project/node_modules npm test
 No real database, live server, gateway, or payment/settlement request is used.
 Stage 6 now provides [atomic settlement safeguards](SETTLEMENTS.md); order queries
 continue to report stored values without making eligibility decisions. Warehouse
-display integration and payment integration remain pending. No later stage has started.
+detail display remains pending. The integrated [payment workflow](PAYMENTS.md)
+adds Payment Review to the dashboard filter; live gateway behavior is unverified.
