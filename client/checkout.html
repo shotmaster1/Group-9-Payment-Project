@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Checkout | Group 9 Payment Project</title>
   <link rel="stylesheet" href="css/styles.css">
+
+
+
   <style>
     .checkout {
       --ink: #1d2733;
@@ -14,7 +17,6 @@
       --page: #eef2f5;
       --accent: #1f5f8b;
       --error: #b3261e;
-      --ok: #1e6b3a;
       font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
       color: var(--ink);
       background: var(--page);
@@ -71,12 +73,51 @@
     @media (max-width: 520px) {
       .row, .row.three { grid-template-columns: 1fr; }
     }
+
+  .cart-summary {
+    background: white;
+    border: 1px solid #c9d2db;
+    border-radius: 6px;
+    padding: 1.25rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .cart-summary h2 {
+    margin-top: 0;
+    font-size: 1.2rem;
+  }
+
+  .checkout-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.65rem 0;
+    border-bottom: 1px solid #e5e7eb;
+  }
+
+  .cart-summary-total {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 1rem;
+    font-size: 1.15rem;
+  }
+
   </style>
 </head>
 <body class="checkout">
   <main>
     <h1>Checkout</h1>
     <p class="order-summary">Order <strong id="order-id">—</strong>, total <strong id="order-total">—</strong></p>
+
+    <section class="cart-summary" id="cart-summary" hidden>
+  <h2>Your Order</h2>
+
+  <div id="checkout-items"></div>
+
+  <div class="cart-summary-total">
+    <strong>Total</strong>
+    <strong id="checkout-cart-total">$0.00</strong>
+  </div>
+  </section>
 
     <div id="checkout-form" novalidate>
       <fieldset>
@@ -156,6 +197,7 @@
   </main>
 
   <script src="js/validation.js"></script>
+  <script src="js/checkout-summary.js"></script>
   <script src="js/checkout.js"></script>
 </body>
 </html>

@@ -71,7 +71,7 @@
         <input
             type="text"
             id="searchInput"
-            placeholder="Search Order ID"
+            placeholder="Search Order ID, email, or name."
         >
 
         <select id="statusFilter">
@@ -79,6 +79,7 @@
             <option value="Pending">Pending</option>
             <option value="Authorized">Authorized</option>
             <option value="Payment Failed">Payment Failed</option>
+            <option value="Payment Review">Payment Review</option>
             <option value="Settled">Settled</option>
         </select>
 
@@ -101,11 +102,12 @@
                 <th>Date</th>
                 <th>Card</th>
                 <th>Authorization Token</th>
+                <th>Authorization Expiration</th>
                 <th>Action</th>
             </tr>
         </thead>
 
-        <tbody id="ordersTableBody">
+        <tbody id="ordersTableBody" aria-live="polite">
 
         </tbody>
 
