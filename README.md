@@ -208,9 +208,9 @@ external capture is implemented or implied.
 - Existing databases need a consistent backup and approved preserving migration
   before deployment. The real ecommerce.db has not been used in tests.
 - APIs currently have no authentication middleware and CORS remains unrestricted.
-  The legacy collection still includes AuthorizationToken for the dashboard's
-  presence check; detail/payment responses exclude it. A safe replacement collection
-  contract is separate work.
+  The order collection exposes a boolean HasAuthorizationToken instead of the raw
+  token and excludes FailureReason. Detail/payment responses also exclude tokens.
+  This changes the legacy collection contract for clients using the removed fields.
 - Warehouse detail/unused-amount display is not yet added. Native browser visual
   layout and live gateway end-to-end behavior have not been certified.
 

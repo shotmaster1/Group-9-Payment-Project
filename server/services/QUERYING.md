@@ -14,17 +14,17 @@ the **highest AuthorizationID for that OrderID**, regardless of timestamp or res
 A later decline is not replaced by an older approval. Missing authorizations yield
 NULL authorization fields while retaining the order. `count` counts returned orders.
 
-The collection preserves these exact PascalCase fields:
+The collection returns these PascalCase fields:
 
 - OrderID, CustomerName, CustomerEmail, ShippingAddress, City, State, Zip
 - OrderDate, OrderTotal, OrderStatus
-- AuthorizationToken, AuthorizationAmount, TransactionDateTime, AuthExpirationDate
-- AuthorizationResult, CardType, CardLast4, FailureReason
+- HasAuthorizationToken, AuthorizationAmount, TransactionDateTime, AuthExpirationDate
+- AuthorizationResult, CardType, CardLast4
 
-The legacy collection still includes AuthorizationToken because PR #5 checks it for
-authorization availability. The new detail endpoint never includes it. Removing the
-collection token field requires a separately agreed replacement contract for that
-presence check. Stage 5 adds no card fields to the collection.
+HasAuthorizationToken is a boolean used by the dashboard's availability indicator.
+The collection does not return the raw AuthorizationToken or FailureReason. This
+changes the legacy collection contract; clients using those fields must be updated.
+Customer and shipping fields remain in the collection for compatibility.
 
 | Query parameter | Existing behavior preserved |
 | --- | --- |

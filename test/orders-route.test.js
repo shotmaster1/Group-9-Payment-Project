@@ -87,15 +87,28 @@ test("unrelated SQLite constraints return 500 rather than duplicate 409 and hide
     assert.equal((await db.getAsync("SELECT COUNT(*) AS count FROM OrderItems")).count,0);
 });
 
-test("GET orders retains the exact legacy collection field names",async t=>{
+test("GET orders returns the safe collection field names",async t=>{
     const db=fixture(t);const request=handlers(db);
     await request("post",payload());
     const result=await request("get",{});
     assert.deepEqual(Object.keys(result.body.orders[0]).sort(),[
         "OrderID","CustomerName","CustomerEmail","ShippingAddress","City","State","Zip",
-        "OrderDate","OrderTotal","OrderStatus","AuthorizationToken","AuthorizationAmount",
-        "TransactionDateTime","AuthExpirationDate","AuthorizationResult","CardType","CardLast4","FailureReason"
+        "OrderDate","OrderTotal","OrderStatus","HasAuthorizationToken","AuthorizationAmount",
+        "TransactionDateTime","AuthExpirationDate","AuthorizationResult","CardType","CardLast4"
     ].sort());
+});
+
+test("GET orders exposes only token availability, not tokens or failure reasons",async t=>{
+    const db=fixture(t);const request=handlers(db);
+    await request("post",payload("SECRET-ORDER"));
+    await db.runAsync("INSERT INTO PaymentAuthorizations (OrderID,AuthorizationToken,AuthorizationAmount,TransactionDateTime,AuthorizationResult,FailureReason) VALUES ('SECRET-ORDER','SYNTHETIC-PRIVATE-TOKEN',10,'2030-01-01','Success','SYNTHETIC-PRIVATE-REASON')");
+    const result=await request("get",{});const row=result.body.orders[0];
+    assert.equal(row.HasAuthorizationToken,true);
+    assert.equal(Object.hasOwn(row,"AuthorizationToken"),false);
+    assert.equal(Object.hasOwn(row,"FailureReason"),false);
+    assert.doesNotMatch(JSON.stringify(result.body),/SYNTHETIC-PRIVATE-(TOKEN|REASON)|CardNumber|CVV/);
+    await db.runAsync("UPDATE PaymentAuthorizations SET AuthorizationToken='' WHERE OrderID='SECRET-ORDER'");
+    assert.equal((await request("get",{})).body.orders[0].HasAuthorizationToken,false);
 });
 
 test("GET retains envelope, PascalCase fields and combined search/status/order-date sorting",async t=>{
@@ -109,7 +122,7 @@ test("GET retains envelope, PascalCase fields and combined search/status/order-d
     const all=await request("get",{});
     assert.equal(all.status,200);assert.equal(all.body.success,true);assert.equal(all.body.count,3);
     assert.deepEqual(all.body.orders.map(order=>order.OrderID),["GAMMA","BETA","ALPHA"]);
-    assert.equal(all.body.orders[0].OrderTotal,129.98);assert.equal(all.body.orders[0].AuthorizationToken,null);
+    assert.equal(all.body.orders[0].OrderTotal,129.98);assert.equal(all.body.orders[0].HasAuthorizationToken,false);
     assert.equal(all.body.orders[0].AuthExpirationDate,null);
     assert.deepEqual((await request("get",{search:"Alice",sort:"oldest"})).body.orders.map(order=>order.OrderID),["ALPHA","GAMMA"]);
     assert.deepEqual((await request("get",{status:"Pending",search:"alice@example.test",sort:"oldest"})).body.orders.map(order=>order.OrderID),["ALPHA"]);

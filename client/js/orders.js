@@ -126,7 +126,7 @@ function renderOrders(orders) {
             order.OrderDate ? new Date(order.OrderDate).toLocaleString() : "",
             cardDisplay,
             // Indicate authorization availability without exposing the token.
-            order.AuthorizationToken ? "Available" : "N/A",
+            order.HasAuthorizationToken === true ? "Available" : "N/A",
             formatAuthorizationExpiration(order.AuthExpirationDate),
         ];
 
