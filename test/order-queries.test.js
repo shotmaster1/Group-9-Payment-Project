@@ -55,11 +55,13 @@ test("collection returns each order once and picks highest authorization ID, not
     assert.equal(a.AuthorizationResult, "Declined");
     assert.equal(a.TransactionDateTime, "2020-01-01T00:00:00Z");
     assert.equal(a.AuthExpirationDate, "2030-02-01T10:00:00Z");
-    assert.equal(a.AuthorizationToken, null);
-    assert.equal(a.FailureReason, "Synthetic decline");
+    assert.equal(a.HasAuthorizationToken, false);
+    assert.equal(rows.find(row => row.OrderID === "B").HasAuthorizationToken, true);
+    assert.ok(rows.every(row => !Object.hasOwn(row, "AuthorizationToken") && !Object.hasOwn(row, "FailureReason")));
     assert.equal((await db.getAsync("SELECT MAX(AuthorizationID) AS id FROM PaymentAuthorizations WHERE OrderID='A'")).id, latest);
     const c = rows.find(row => row.OrderID === "C");
-    for (const field of ["AuthorizationToken", "AuthorizationAmount", "TransactionDateTime", "AuthExpirationDate", "AuthorizationResult", "CardType", "CardLast4", "FailureReason"]) assert.equal(c[field], null);
+    assert.equal(c.HasAuthorizationToken, false);
+    for (const field of ["AuthorizationAmount", "TransactionDateTime", "AuthExpirationDate", "AuthorizationResult", "CardType", "CardLast4"]) assert.equal(c[field], null);
 });
 
 test("collection preserves ID, email and customer-name search with status and all sort modes", async t => {

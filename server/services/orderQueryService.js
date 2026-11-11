@@ -34,12 +34,12 @@ async function listOrders(filters = {}, { database = defaultDatabase } = {}) {
     if ([status, search, sort].some(value => value !== undefined && typeof value !== "string")) {
         throw new OrderQueryError("Order query parameters must be text values.");
     }
-    // Keep the legacy collection fields, including the dashboard's token-presence field.
-    // The new detail endpoint below has a separate, token-free projection.
+    // Expose only whether a token exists, never the token or free-form failure text.
     let sql = `SELECT ${orderColumns},
-        pa.AuthorizationToken, pa.AuthorizationAmount, pa.TransactionDateTime,
-        pa.AuthExpirationDate, pa.AuthorizationResult, pa.CardType, pa.CardLast4,
-        pa.FailureReason
+        CASE WHEN pa.AuthorizationToken IS NOT NULL AND pa.AuthorizationToken <> ''
+            THEN 1 ELSE 0 END AS HasAuthorizationToken,
+        pa.AuthorizationAmount, pa.TransactionDateTime,
+        pa.AuthExpirationDate, pa.AuthorizationResult, pa.CardType, pa.CardLast4
         FROM Orders o
         LEFT JOIN PaymentAuthorizations pa ON pa.OrderID = o.OrderID
             AND pa.AuthorizationID = (
@@ -64,7 +64,9 @@ async function listOrders(filters = {}, { database = defaultDatabase } = {}) {
     };
     const ordering = Object.hasOwn(sorting, sort) ? sorting[sort] : "o.OrderDate DESC";
     sql += ` ORDER BY ${ordering}, o.OrderID ASC`;
-    return (await database.allAsync(sql, params)).map(publicAuthorization);
+    return (await database.allAsync(sql, params)).map(row => publicAuthorization({
+        ...row, HasAuthorizationToken: row.HasAuthorizationToken === 1
+    }));
 }
 
 async function getOrderDetails(orderId, { database = defaultDatabase } = {}) {

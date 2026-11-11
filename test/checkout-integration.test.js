@@ -168,6 +168,7 @@ test("full mocked storefront, checkout, dashboard, warehouse and settlement jour
     dashboard.runScripts();
     await waitFor(() => dashboard.get("ordersTableBody").children[0]?.textContent.includes(orderId), "dashboard authorized order");
     const row = dashboard.get("ordersTableBody").children[0]; assert.equal(row.children.length, 10);
+    assert.equal(row.children[7].textContent, "Available");
     assert.match(row.textContent, /1111/); assert.doesNotMatch(row.textContent, /4111111111111111|SYNTHETIC-AUTH/);
     const settleButton = row.children[9].children[0]; await settleButton.click();
     assert.equal(dashboard.window.location.href, "warehouse.html?orderId=" + encodeURIComponent(orderId));
