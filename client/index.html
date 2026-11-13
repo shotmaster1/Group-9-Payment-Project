@@ -34,6 +34,12 @@
       margin: 0;
     }
 
+    .header-subheading {
+      margin: 0.25rem 0 0;
+      font-size: 0.9rem;
+      font-style: italic;
+    }
+
     nav a {
       color: white;
       text-decoration: none;
@@ -66,7 +72,7 @@
     .product-card img {
       width: 100%;
       height: 180px;
-      object-fit: cover;
+      object-fit: contain;
       border-radius: 6px;
       background: #ddd;
     }
@@ -106,6 +112,7 @@
       padding: 1.5rem;
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
       height: fit-content;
+      margin-top: 4.25rem;
     }
 
     .cart h2 {
@@ -171,7 +178,10 @@
 <body>
 
   <header>
-    <h1>Group 9 Store</h1>
+    <div>
+      <h1>From Checkout to Campsite 🏕️</h1>
+      <p class="header-subheading">Powered by smart commerce, made for the great outdoors!</p>
+    </div>
 
     <nav>
       <a href="/">Store</a>

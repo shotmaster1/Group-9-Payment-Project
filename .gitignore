@@ -1,4 +1,8 @@
 node_modules/
 .env
 *.db
+/server/database/demo.sqlite
+/server/database/demo.sqlite-journal
+/server/database/demo.sqlite-wal
+/server/database/demo.sqlite-shm
 .DS_Store
