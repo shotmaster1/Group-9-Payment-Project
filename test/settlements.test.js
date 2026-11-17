@@ -33,7 +33,7 @@ async function addAuthorization(db, id, amount, expiration = expiry, result = "S
         (OrderID, AuthorizationToken, AuthorizationAmount, TransactionDateTime, AuthExpirationDate, AuthorizationResult)
         VALUES (?, NULL, ?, ?, ?, ?)`, [id, amount, date, expiration, result]);
 }
-const request = (orderId = "SYNTHETIC", finalAmount = 80) => ({ orderId, finalAmount });
+const request = (orderId = "SYNTHETIC", finalAmount = 80) => ({ orderId, finalAmount, underSettlementReason: "Other" });
 const options = database => ({ database, now: () => instant });
 async function unchanged(db, id = "SYNTHETIC", status = "Authorized") {
     assert.equal((await db.getAsync("SELECT OrderStatus FROM Orders WHERE OrderID = ?", [id])).OrderStatus, status);
@@ -46,8 +46,8 @@ test("under-settlement returns existing success fields plus unused amount and co
     const db = fixture(t).open(); await seed(db);
     const beforeAuth = await db.allAsync("SELECT * FROM PaymentAuthorizations");
     const result = await settleOrder(request(), options(db));
-    assert.deepEqual(result, { message: "Successful settlement request received", orderId: "SYNTHETIC", finalAmount: 80, authorizedAmount: 100, unusedAuthorizationAmount: 20 });
-    assert.deepEqual(await db.getAsync("SELECT * FROM Settlements"), { SettlementID: 1, OrderID: "SYNTHETIC", FinalShipmentAmount: 80, SettlementDate: "2030-01-01T12:00:00.000Z", SettlementResult: "Success" });
+    assert.deepEqual(result, { message: "Successful settlement request received", orderId: "SYNTHETIC", finalAmount: 80, authorizedAmount: 100, unusedAuthorizationAmount: 20, underSettlementReason: "Other", orderStatus: "Settled" });
+    assert.deepEqual(await db.getAsync("SELECT * FROM Settlements"), { SettlementID: 1, OrderID: "SYNTHETIC", FinalShipmentAmount: 80, SettlementDate: "2030-01-01T12:00:00.000Z", SettlementResult: "Success", UnderSettlementReason: "Other" });
     assert.equal((await db.getAsync("SELECT OrderStatus FROM Orders")).OrderStatus, "Settled");
     assert.deepEqual(await db.allAsync("SELECT * FROM PaymentAuthorizations"), beforeAuth);
     assert.deepEqual(await db.allAsync("PRAGMA foreign_key_check"), []);
@@ -88,7 +88,7 @@ test("invalid request amounts fail before any database use", async () => {
 test("malformed bodies, IDs, extra fields and getters are rejected without database access", async () => {
     let calls = 0, read = false;
     const database = { withTransaction() { calls++; throw new Error("No database access expected"); } };
-    for (const input of [null, undefined, [], "request", {}, ...[null, undefined, "", " \n", 1, true, [], {}].map(orderId => ({ orderId, finalAmount: 80 })), { ...request(), authorizedAmount: 100 }, { ...request(), now: instant }]) {
+    for (const input of [null, undefined, [], "request", {}, ...[null, undefined, "", " \n", 1, true, [], {}].map(orderId => ({ orderId, finalAmount: 80 , underSettlementReason: "Other" })), { ...request(), authorizedAmount: 100 }, { ...request(), now: instant }]) {
         await assert.rejects(settleOrder(input, { database }), error => error instanceof SettlementError && error.statusCode === 400);
     }
     await assert.rejects(settleOrder({ get orderId() { read = true; return "SYNTHETIC"; }, finalAmount: 80 }, { database }), errorCode("INVALID_REQUEST"));
@@ -213,7 +213,7 @@ test("repeated successful submissions cannot add new settlements", async t => {
 
 test("historical duplicate settlements remain byte-for-value intact and block new records even if status is Authorized", async t => {
     const db = fixture(t).open(); await seed(db);
-    for (const id of [9, 18]) await db.runAsync("INSERT INTO Settlements VALUES (?, 'SYNTHETIC', 10, '2029-01-01', 'Success')", [id]);
+    for (const id of [9, 18]) await db.runAsync("INSERT INTO Settlements (SettlementID,OrderID,FinalShipmentAmount,SettlementDate,SettlementResult) VALUES (?, 'SYNTHETIC', 10, '2029-01-01', 'Success')", [id]);
     const before = await db.allAsync("SELECT * FROM Settlements ORDER BY SettlementID");
     await assert.rejects(settleOrder(request(), options(db)), errorCode("ALREADY_RECORDED"));
     assert.deepEqual(await db.allAsync("SELECT * FROM Settlements ORDER BY SettlementID"), before);
@@ -222,7 +222,7 @@ test("historical duplicate settlements remain byte-for-value intact and block ne
 
 test("a rejected historical settlement also requires review rather than creating another history row", async t => {
     const db = fixture(t).open(); await seed(db);
-    await db.runAsync("INSERT INTO Settlements VALUES (1, 'SYNTHETIC', 10, '2029-01-01', 'Rejected')");
+    await db.runAsync("INSERT INTO Settlements (SettlementID,OrderID,FinalShipmentAmount,SettlementDate,SettlementResult) VALUES (1, 'SYNTHETIC', 10, '2029-01-01', 'Rejected')");
     await assert.rejects(settleOrder(request(), options(db)), errorCode("ALREADY_RECORDED"));
     assert.equal((await db.getAsync("SELECT COUNT(*) AS count FROM Settlements")).count, 1);
 });
@@ -305,7 +305,7 @@ test("queued input snapshots preserve Order ID and amount", async t => {
     const body = request(); const pending = settleOrder(body, options(db));
     body.orderId = "OTHER"; body.finalAmount = 1;
     release.resolve(); await held;
-    assert.deepEqual(await pending, { message: "Successful settlement request received", orderId: "SYNTHETIC", finalAmount: 80, authorizedAmount: 100, unusedAuthorizationAmount: 20 });
+    assert.deepEqual(await pending, { message: "Successful settlement request received", orderId: "SYNTHETIC", finalAmount: 80, authorizedAmount: 100, unusedAuthorizationAmount: 20, underSettlementReason: "Other", orderStatus: "Settled" });
 });
 
 test("literal IDs are bound safely and existing related order data remain unchanged", async t => {
@@ -335,7 +335,7 @@ test("service import is lazy and default settlement uses only an explicit synthe
         '(async()=>{assert.equal(fs.existsSync(process.env.DB_PATH),false);',
         'await db.runAsync("INSERT INTO Orders VALUES (?,?,?,?,?,?,?,?,?,?)",["CHILD","Alex","alex@example.test","Synthetic","","","","2030-01-01",100,"Authorized"]);',
         'await db.runAsync("INSERT INTO PaymentAuthorizations (OrderID,AuthorizationAmount,TransactionDateTime,AuthExpirationDate,AuthorizationResult) VALUES (?,?,?,?,?)",["CHILD",100,"2030-01-01","2030-01-02T00:00:00Z","Success"]);',
-        'const result=await service.settleOrder({orderId:"CHILD",finalAmount:80},{now:()=>Date.parse("2030-01-01T12:00:00Z")});',
+        'const result=await service.settleOrder({orderId:"CHILD",finalAmount:80, underSettlementReason: "Other" },{now:()=>Date.parse("2030-01-01T12:00:00Z")});',
         'assert.equal(result.unusedAuthorizationAmount,20);await db.closeAsync();})().catch(error=>{console.error(error);process.exitCode=1;});'
     ].join('\n');
     const result = spawnSync(process.execPath, ["-e", code, path.resolve(__dirname, "../server/services/settlementService.js"), path.resolve(__dirname, "../server/database/db.js")], { env: { ...process.env, DB_PATH: f.filename }, encoding: "utf8", timeout: 5000 });
@@ -412,7 +412,7 @@ test("historical payment adapter and handler can authorize date-only expirations
         const expectedExpiration = [undefined, null, ""].includes(providerExpiration) ? "2028-12-31" : providerExpiration;
         assert.equal(stored.AuthExpirationDate, expectedExpiration);
         assert.equal(authorized.body.expirationDate, expectedExpiration);
-        const pending = settleOrder({ orderId: id, finalAmount: 80 }, options(db));
+        const pending = settleOrder({ orderId: id, finalAmount: 80 , underSettlementReason: "Other" }, options(db));
         if (accepted) {
             assert.equal((await pending).unusedAuthorizationAmount, 20);
         } else {

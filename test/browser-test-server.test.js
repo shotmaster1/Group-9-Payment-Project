@@ -177,7 +177,7 @@ test("real server serves all pages, scripts, stylesheet and PNGs from a fresh is
         assert.deepEqual(Buffer.from(await response.arrayBuffer()), fs.readFileSync(file), asset);
     }
     assert.equal((await f.request("/api/orders/MISSING-SYNTHETIC")).status, 404);
-    assert.equal((await f.request("/api/settlements", post({ orderId: "MISSING-SYNTHETIC", finalAmount: 1 }))).status, 404);
+    assert.equal((await f.request("/api/settlements", post({ orderId: "MISSING-SYNTHETIC", finalAmount: 1 , underSettlementReason: "Other" }))).status, 404);
     assert.equal(f.messages.filter(message => message.kind === "authorization").length, 0);
     f.child.kill("SIGINT");
     assert.deepEqual(await f.exited, [0, null]);
@@ -210,26 +210,29 @@ test("actual frontend and HTTP routes complete approved checkout, dashboard, und
     assert.equal(dashboard.window.location.href, "warehouse.html?orderId=" + encodeURIComponent(orderId));
     const warehouse = browser("warehouse.html", { fetch: f.fetch, search: "?orderId=" + encodeURIComponent(orderId) });
     warehouse.runScripts();
+    await waitFor(() => !warehouse.get("settlementSubmitButton").disabled, "warehouse authorization details");
     assert.equal(warehouse.get("orderId").value, orderId);
     warehouse.get("finalAmount").value = "65.00";
+    warehouse.get("underSettlementReason").value = "Other";
     await warehouse.get("settlementForm").dispatch("submit");
-    assert.match(warehouse.get("result").textContent, /exceeds authorized amount/);
+    assert.match(warehouse.get("result").textContent, /cannot exceed the authorization amount/);
     assert.equal(warehouse.get("settlementSubmitButton").disabled, false);
     warehouse.get("finalAmount").value = "40.00";
+    warehouse.get("underSettlementReason").value = "Other";
     await Promise.all([warehouse.get("settlementForm").dispatch("submit"), warehouse.get("settlementForm").dispatch("submit")]);
     assert.match(warehouse.get("result").textContent, /Successful settlement/);
     assert.equal(warehouse.get("settlementSubmitButton").disabled, true);
     const detail = (await f.request("/api/orders/" + orderId)).body.order;
     assert.equal(detail.OrderStatus, "Settled"); assert.equal(detail.Settlements.length, 1);
     assert.equal(detail.Settlements[0].FinalShipmentAmount, 40);
-    assert.equal((await f.request("/api/settlements", post({ orderId, finalAmount: 40 }))).status, 400);
+    assert.equal((await f.request("/api/settlements", post({ orderId, finalAmount: 40 , underSettlementReason: "Other" }))).status, 400);
     const second = await purchase(f);
     const concurrent = await Promise.all([1, 2].map(() => f.request("/api/settlements", post({ orderId: second.orderId, finalAmount: 64.99 }))));
     assert.deepEqual(concurrent.map(response => response.status).sort(), [200, 400]);
     assert.equal(concurrent.find(response => response.status === 200).body.unusedAuthorizationAmount, 0);
     assert.equal((await f.request("/api/orders/" + second.orderId)).body.order.Settlements.length, 1);
     const third = await purchase(f);
-    const under = await f.request("/api/settlements", post({ orderId: third.orderId, finalAmount: 40 }));
+    const under = await f.request("/api/settlements", post({ orderId: third.orderId, finalAmount: 40 , underSettlementReason: "Other" }));
     assert.equal(under.status, 200); assert.equal(under.body.unusedAuthorizationAmount, 24.99);
     assert.equal(f.messages.filter(message => message.kind === "authorization").length, 3);
 });
@@ -241,7 +244,7 @@ for (const scenario of ["declined", "payment-review"]) {
         assert.notEqual(saved.getItem("group9Cart"), null);
         const detail = (await f.request("/api/orders/" + orderId)).body.order;
         assert.equal(detail.OrderStatus, scenario === "declined" ? "Payment Failed" : "Payment Review");
-        assert.equal((await f.request("/api/settlements", post({ orderId, finalAmount: 1 }))).status, 400);
+        assert.equal((await f.request("/api/settlements", post({ orderId, finalAmount: 1 , underSettlementReason: "Other" }))).status, 400);
         if (scenario === "payment-review") {
             assert.match(ui.get("result").textContent, /amount does not match/);
             assert.equal(detail.LatestAuthorization.AuthorizationAmount, 65);

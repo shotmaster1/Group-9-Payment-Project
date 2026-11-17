@@ -4,6 +4,10 @@ const defaultDatabase = require("../database/db");
 const { MoneyError, toCents, fromCents } = require("./moneyService");
 const { manhattanAuthorizationExpiration, AuthorizationExpirationError } = require("./authorizationExpiration");
 
+const UNDER_SETTLEMENT_REASONS = Object.freeze([
+    "Unavailable inventory", "Damaged items", "Partial fulfillment", "Other"
+]);
+
 class SettlementError extends Error {
     constructor(code, message, statusCode = 400, details = {}) {
         super(message);
@@ -20,8 +24,8 @@ function prepareRequest(input) {
         throw new SettlementError("INVALID_REQUEST", "Supply an Order ID and final shipment amount.");
     }
     const fields = Object.getOwnPropertyDescriptors(input);
-    if (Reflect.ownKeys(input).some(key => typeof key !== "string" || !["orderId", "finalAmount"].includes(key) || !Object.hasOwn(fields[key], "value"))) {
-        throw new SettlementError("INVALID_REQUEST", "Supply only orderId and finalAmount values.");
+    if (Reflect.ownKeys(input).some(key => typeof key !== "string" || !["orderId", "finalAmount", "underSettlementReason"].includes(key) || !Object.hasOwn(fields[key], "value"))) {
+        throw new SettlementError("INVALID_REQUEST", "Supply orderId, finalAmount and an optional underSettlementReason.");
     }
     const orderId = fields.orderId?.value;
     if (typeof orderId !== "string" || !orderId.trim()) {
@@ -36,8 +40,12 @@ function prepareRequest(input) {
         if (!(error instanceof MoneyError)) throw error;
         throw new SettlementError("INVALID_AMOUNT", "Enter a positive settlement amount with no more than two decimal places within the safe money range.");
     }
+    const reason = fields.underSettlementReason?.value;
+    if (reason != null && !UNDER_SETTLEMENT_REASONS.includes(reason)) {
+        throw new SettlementError("INVALID_SETTLEMENT_REASON", "Choose a listed reason for under-settlement.");
+    }
     // Copy input before waiting for the transaction; preserve exact historical IDs.
-    return { orderId, finalCents, finalAmount };
+    return { orderId, finalCents, finalAmount, reason: reason ?? null };
 }
 
 function expirationNanoseconds(value) {
@@ -106,10 +114,14 @@ async function settleOrder(input, { database = defaultDatabase, now = Date.now }
         if (BigInt(currentTime) * 1000000n >= expiresAt) {
             throw new SettlementError("AUTHORIZATION_EXPIRED", "The latest payment authorization has expired.");
         }
+        const underSettlementReason = request.finalCents < authorizedCents ? request.reason : null;
+        if (request.finalCents < authorizedCents && !underSettlementReason) {
+            throw new SettlementError("SETTLEMENT_REASON_REQUIRED", "Choose a reason when settling less than the authorized amount.");
+        }
         const settlementDate = new Date(currentTime).toISOString();
         const inserted = await tx.run(`INSERT INTO Settlements
-            (OrderID, FinalShipmentAmount, SettlementDate, SettlementResult)
-            VALUES (?, ?, ?, 'Success')`, [request.orderId, request.finalAmount, settlementDate]);
+            (OrderID, FinalShipmentAmount, SettlementDate, SettlementResult, UnderSettlementReason)
+            VALUES (?, ?, ?, 'Success', ?)`, [request.orderId, request.finalAmount, settlementDate, underSettlementReason]);
         if (inserted.changes !== 1) throw new Error("Settlement insert did not save exactly one record.");
         const updated = await tx.run("UPDATE Orders SET OrderStatus = 'Settled' WHERE OrderID = ? AND OrderStatus = 'Authorized'", [request.orderId]);
         if (updated.changes !== 1) throw new Error("Settlement status update did not save exactly one record.");
@@ -118,9 +130,11 @@ async function settleOrder(input, { database = defaultDatabase, now = Date.now }
             orderId: request.orderId,
             finalAmount: request.finalAmount,
             authorizedAmount,
-            unusedAuthorizationAmount
+            unusedAuthorizationAmount,
+            underSettlementReason,
+            orderStatus: "Settled"
         };
     });
 }
 
-module.exports = { settleOrder, SettlementError };
+module.exports = { settleOrder, SettlementError, UNDER_SETTLEMENT_REASONS };

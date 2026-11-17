@@ -173,7 +173,9 @@ test("full mocked storefront, checkout, dashboard, warehouse and settlement jour
     const settleButton = row.children[9].children[0]; await settleButton.click();
     assert.equal(dashboard.window.location.href, "warehouse.html?orderId=" + encodeURIComponent(orderId));
     const warehouse = browser("warehouse.html", { sessionStorage: saved, fetch: network.fetch, search: "?orderId=" + encodeURIComponent(orderId) }); warehouse.runScripts();
+    await waitFor(() => !warehouse.get("settlementSubmitButton").disabled, "warehouse authorization details");
     assert.equal(warehouse.get("orderId").value, orderId); warehouse.get("finalAmount").value = "80.00";
+    warehouse.get("underSettlementReason").value = "Other";
     await warehouse.get("settlementForm").dispatch("submit");
     assert.match(warehouse.get("result").textContent, /Successful settlement/); assert.equal(warehouse.get("settlementSubmitButton").disabled, true);
     const detail = await (await network.fetch("/api/orders/" + encodeURIComponent(orderId))).json();

@@ -4,47 +4,71 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Warehouse Settlement</title>
+    <style>
+        * { box-sizing: border-box; }
+        body { margin: 0; font-family: system-ui, -apple-system, sans-serif; background: #eef2f5; color: #1d2733; }
+        header { background: #1f5f8b; color: white; padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; }
+        header h1 { font-size: 1.5rem; margin: 0; }
+        nav { display: flex; gap: 1rem; flex-wrap: wrap; }
+        nav a { color: white; }
+        main { max-width: 800px; margin: 2rem auto; padding: 0 1rem; }
+        .panel { background: white; border-radius: 8px; padding: 1.5rem; margin-bottom: 1.5rem; box-shadow: 0 4px 12px rgba(0,0,0,.08); }
+        h2 { margin-top: 0; }
+        label { display: block; font-weight: 600; margin-bottom: .4rem; }
+        .field { margin-bottom: 1.25rem; }
+        input, select, button { font: inherit; width: 100%; padding: .75rem; border: 1px solid #b4c0c9; border-radius: 5px; }
+        input:focus-visible, select:focus-visible, button:focus-visible { outline: 3px solid #1f5f8b; outline-offset: 2px; }
+        button { background: #1f5f8b; border: 0; color: white; cursor: pointer; }
+        button:disabled { background: #9ca7b0; cursor: default; }
+        .hint { color: #526270; font-size: .9rem; }
+        .breakdown div { display: flex; justify-content: space-between; gap: 1rem; padding: .6rem 0; }
+        .breakdown dt { color: #526270; }
+        .breakdown dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
+        .unused { border-top: 1px solid #dce2e7; }
+        #result, #orderDetailsStatus { overflow-wrap: anywhere; }
+        .notice { background: #eef5fa; border-left: 4px solid #1f5f8b; padding: 1rem; }
+        [hidden] { display: none !important; }
+    </style>
 </head>
-
 <body>
-
+<header>
     <h1>Warehouse Settlement</h1>
-
-    <form id="settlementForm" novalidate aria-busy="false">
-
-        <div>
-            <label for="orderId">Order ID:</label>
-            <input
-                type="text"
-                id="orderId"
-                name="orderId"
-                required
-            >
-        </div>
-
-        <br>
-
-        <div>
-            <label for="finalAmount">Final Shipment Amount:</label>
-            <input
-                type="number"
-                id="finalAmount"
-                name="finalAmount"
-                step="0.01"
-                min="0.01"
-                required
-            >
-        </div>
-
-        <br>
-
-        <button type="submit" id="settlementSubmitButton">Submit Settlement</button>
-
-    </form>
-
-    <p id="result" role="status" aria-live="polite"></p>
-
-    <script src="js/settlement.js"></script>
-
+    <nav aria-label="Main navigation"><a href="/">Store</a><a href="orders.html">Order Management</a><a href="warehouse.html">Warehouse</a></nav>
+</header>
+<main>
+    <section class="panel" aria-labelledby="settlementHeading">
+        <h2 id="settlementHeading">Final settlement</h2>
+        <form id="settlementForm" novalidate aria-busy="false">
+            <div class="field"><label for="orderId">Order ID</label><input type="text" id="orderId" name="orderId" required aria-describedby="orderDetailsStatus"></div>
+            <p id="orderDetailsStatus" class="hint" role="status" aria-live="polite">Enter an Order ID to load its authorization details.</p>
+            <div class="field"><label for="finalAmount">Settlement amount ($)</label><input type="number" id="finalAmount" name="finalAmount" step="0.01" min="0.01" required></div>
+            <div id="reasonField" class="field" hidden>
+                <label for="underSettlementReason">Reason for under-settlement</label>
+                <select id="underSettlementReason" name="underSettlementReason" disabled>
+                    <option value="">Choose a reason</option>
+                    <option value="Unavailable inventory">Unavailable inventory</option>
+                    <option value="Damaged items">Damaged items</option>
+                    <option value="Partial fulfillment">Partial fulfillment</option>
+                    <option value="Other">Other</option>
+                </select>
+            </div>
+            <section aria-labelledby="breakdownHeading">
+                <h3 id="breakdownHeading">Settlement breakdown</h3>
+                <dl class="breakdown">
+                    <div><dt>Original authorization amount</dt><dd id="authorizedAmount">—</dd></div>
+                    <div><dt>Settlement amount</dt><dd id="settlementAmount">—</dd></div>
+                    <div class="unused"><dt>Unused authorization amount</dt><dd id="unusedAmount">—</dd></div>
+                </dl>
+                <p id="amountHint" class="hint" role="status" aria-live="polite"></p>
+                <p id="unusedExplanation" class="notice" hidden>The remaining authorized amount is not included in this final settlement. Any actual authorization release is handled separately by the payment provider.</p>
+            </section>
+            <button type="submit" id="settlementSubmitButton" disabled>Submit Settlement</button>
+        </form>
+        <p id="result" role="status" aria-live="polite"></p>
+    </section>
+    <section id="confirmation" class="panel" hidden aria-labelledby="confirmationHeading"><h2 id="confirmationHeading">Settlement confirmed</h2><dl id="confirmationDetails" class="breakdown"></dl><p id="confirmationExplanation" class="notice" hidden>The remaining authorized amount is not included in this final settlement. Any actual authorization release is handled separately by the payment provider.</p></section>
+    <section id="settlementHistory" class="panel" hidden aria-labelledby="historyHeading"><h2 id="historyHeading">Recorded settlement details</h2><div id="historyDetails"></div></section>
+</main>
+<script src="js/settlement.js"></script>
 </body>
 </html>

@@ -10,7 +10,7 @@ const sqlite3 = require("sqlite3");
 const { createDatabase } = require("../server/database/database");
 const { CURRENT_SCHEMA_VERSION, migrateDatabase } = require("../server/database/migrations");
 const schema = fs.readFileSync(path.join(__dirname, "../server/database/schema.sql"), "utf8");
-const baseSchema = schema.slice(0, schema.indexOf("-- Snapshot values"));
+const baseSchema = schema.slice(0, schema.indexOf("-- Snapshot values")).replace("    UnderSettlementReason TEXT,\n", "");
 const itemSchema = schema.slice(schema.indexOf("CREATE TABLE IF NOT EXISTS OrderItems"));
 const quote = (name) => '"' + name.replace(/"/g, '""') + '"';
 const digest = (filename) => createHash("sha256").update(fs.readFileSync(filename)).digest("hex");
@@ -77,7 +77,7 @@ async function legacy(filename, options = {}) {
         if (options.failureReason) await db.run("UPDATE " + quote(name) + " SET FailureReason = ? WHERE AuthorizationID = ?", ["Preserve synthetic failure detail", 20]);
         for (let i = 1; i <= 9; i++) {
             const order = ((i - 1) % 3) + 1;
-            await db.run("INSERT INTO Settlements VALUES (?, ?, ?, ?, ?)", [i * 10, "SYN-ORDER-0" + order, i * 0.25, "2030-01-02T00:00:00Z", "Success"]);
+            await db.run("INSERT INTO Settlements (SettlementID,OrderID,FinalShipmentAmount,SettlementDate,SettlementResult) VALUES (?, ?, ?, ?, ?)", [i * 10, "SYN-ORDER-0" + order, i * 0.25, "2030-01-02T00:00:00Z", "Success"]);
         }
         // Reserve deleted-ID high-water marks without retaining extra records.
         await db.run("UPDATE sqlite_sequence SET seq = 900 WHERE name = ?", [name]);
@@ -102,12 +102,12 @@ async function assertHistoricalRows(db, before, authName = "PaymentAuthorization
     }
 }
 
-test("fresh initialization applies v1/v2 and matches the schema mirror", async (t) => {
+test("fresh initialization applies v1/v2/v3 and matches the schema mirror", async (t) => {
     const f = fixture(t);
     const db = f.open();
-    assert.deepEqual(await db.ready, { fromVersion: 0, toVersion: 2, appliedVersions: [1, 2], existingForeignKeyViolations: 0 });
-    assert.equal(CURRENT_SCHEMA_VERSION, 2);
-    assert.equal((await db.getAsync("PRAGMA user_version")).user_version, 2);
+    assert.deepEqual(await db.ready, { fromVersion: 0, toVersion: 3, appliedVersions: [1, 2, 3], existingForeignKeyViolations: 0 });
+    assert.equal(CURRENT_SCHEMA_VERSION, 3);
+    assert.equal((await db.getAsync("PRAGMA user_version")).user_version, 3);
     assert.equal((await db.getAsync("SELECT COUNT(*) AS count FROM Products")).count, 5);
     assert.equal((await db.getAsync("SELECT COUNT(*) AS count FROM OrderItems")).count, 0);
     const mirrored = fixture(t);
@@ -158,7 +158,7 @@ test("nullable token and FailureReason work, retaining IDs, extra columns, const
 test("already-nullable v0 adds only FailureReason and preserves existing metadata", async (t) => {
     const f = fixture(t); await legacy(f.filename, { tokenNullable: true });
     const rootPage = await withRaw(f.filename, (db) => db.get("SELECT rootpage FROM sqlite_master WHERE name='PaymentAuthorizations'"));
-    const db = f.open(); assert.deepEqual((await db.ready).appliedVersions, [1, 2]);
+    const db = f.open(); assert.deepEqual((await db.ready).appliedVersions, [1, 2, 3]);
     assert.equal((await db.getAsync("SELECT rootpage FROM sqlite_master WHERE name='PaymentAuthorizations'")).rootpage, rootPage.rootpage);
     assert.equal((await db.getAsync("SELECT COUNT(*) AS count FROM PaymentAuthorizations")).count, 18);
     assert.equal((await db.getAsync("SELECT COUNT(*) AS count FROM sqlite_master WHERE name IN ('SyntheticAuthByOrder','SyntheticAuthAudit')")).count, 2);
@@ -184,11 +184,11 @@ test("existing FailureReason values survive a token-nullability rebuild", async 
     assert.equal((await db.getAsync("SELECT FailureReason FROM PaymentAuthorizations WHERE AuthorizationID=20")).FailureReason, "Preserve synthetic failure detail");
 });
 
-test("version 1 applies only OrderItems migration", async (t) => {
+test("version 1 applies OrderItems and settlement reason migrations", async (t) => {
     const f = fixture(t); await legacy(f.filename, { tokenNullable: true, failureReason: true, version: 1 });
     const before = await withRaw(f.filename, snapshot);
     const db = f.open();
-    assert.deepEqual((await db.ready).appliedVersions, [2]);
+    assert.deepEqual((await db.ready).appliedVersions, [2, 3]);
     await assertHistoricalRows(db, before);
     assert.equal((await db.getAsync("SELECT COUNT(*) AS count FROM OrderItems")).count, 0);
 });
@@ -201,7 +201,7 @@ test("reopening migrated databases is idempotent and does not rewrite schema or 
     for (let i = 0; i < 2; i++) {
         const db = f.open();
         assert.deepEqual((await db.ready).appliedVersions, []);
-        assert.equal((await db.ready).fromVersion, 2);
+        assert.equal((await db.ready).fromVersion, 3);
         await db.closeAsync();
     }
     assert.deepEqual(await withRaw(f.filename, snapshot), before);
@@ -212,8 +212,8 @@ test("concurrent initializers inspect versions under the same write lock", async
     const f = fixture(t); await legacy(f.filename);
     const first = f.open(); const second = f.open();
     const reports = await Promise.all([first.ready, second.ready]);
-    assert.deepEqual(reports.map((row) => row.fromVersion).sort(), [0, 2]);
-    assert.deepEqual(reports.map((row) => row.appliedVersions.length).sort(), [0, 2]);
+    assert.deepEqual(reports.map((row) => row.fromVersion).sort(), [0, 3]);
+    assert.deepEqual(reports.map((row) => row.appliedVersions.length).sort(), [0, 3]);
     assert.equal((await second.getAsync("SELECT COUNT(*) AS count FROM Products")).count, 5);
     assert.equal((await second.getAsync("SELECT COUNT(*) AS count FROM PaymentAuthorizations")).count, 18);
 });
@@ -264,8 +264,8 @@ test("failed order/item transactions leave no partial order or snapshots", async
     assert.equal((await db.getAsync("SELECT COUNT(*) AS count FROM OrderItems")).count, 0);
 });
 
-test("failures after either version increment roll back rows/schema/metadata/version and restore settings", async (t) => {
-    for (const version of [1, 2]) {
+test("failures after every version increment roll back rows/schema/metadata/version and restore settings", async (t) => {
+    for (const version of [1, 2, 3]) {
         const f = fixture(t); await legacy(f.filename);
         await withRaw(f.filename, async (raw) => {
             const before = await snapshot(raw);
@@ -279,13 +279,13 @@ test("failures after either version increment roll back rows/schema/metadata/ver
             assert.equal((await raw.get("PRAGMA foreign_keys")).foreign_keys, 1);
             assert.equal((await raw.get("PRAGMA legacy_alter_table")).legacy_alter_table, 0);
             assert.equal((await raw.get("SELECT COUNT(*) AS count FROM SyntheticAuthView")).count, 18);
-            assert.deepEqual((await migrateDatabase(raw)).appliedVersions, [1, 2]);
+            assert.deepEqual((await migrateDatabase(raw)).appliedVersions, [1, 2, 3]);
         });
     }
 });
 
 test("unsupported future and negative versions fail without changing any database bytes", async (t) => {
-    for (const version of [-1, 3, 99]) {
+    for (const version of [-1, 4, 99]) {
         const f = fixture(t); await legacy(f.filename, { version }); const before = digest(f.filename);
         const db = f.open(); await assert.rejects(db.ready, { code: "DB_SCHEMA_VERSION_UNSUPPORTED" });
         await assert.rejects(db.getAsync("SELECT 1"), { code: "DB_SCHEMA_VERSION_UNSUPPORTED" });
@@ -374,4 +374,45 @@ test("existing OrderItems must have a unique item primary key and usable integer
         await assert.rejects(db.ready, { code: "DB_MIGRATION_UNSUPPORTED" });
         await db.closeAsync(); assert.equal(digest(f.filename), before);
     }
+});
+
+test("v2 reason migration preserves duplicate histories, IDs, relationships and sequence; reopen is idempotent", async t => {
+    const f = fixture(t); await legacy(f.filename, { tokenNullable: true, failureReason: true, version: 2 });
+    await withRaw(f.filename, db => db.exec(itemSchema +
+        "CREATE INDEX SettlementByOrder ON Settlements(OrderID);" +
+        "CREATE TRIGGER SettlementAudit AFTER INSERT ON Settlements BEGIN SELECT NEW.SettlementID; END;"));
+    const before = await withRaw(f.filename, snapshot);
+    const db = f.open();
+    assert.deepEqual((await db.ready).appliedVersions, [3]); await assertHistoricalRows(db, before);
+    assert.equal((await db.getAsync("PRAGMA user_version")).user_version, 3);
+    for (const name of ["SettlementByOrder", "SettlementAudit"]) {
+        assert.equal((await db.getAsync("SELECT sql FROM sqlite_master WHERE name=?", [name])).sql,
+            before.objects.find(row => row.name === name).sql);
+    }
+    assert.equal((await db.getAsync("SELECT count(*) AS n FROM Settlements WHERE UnderSettlementReason IS NULL")).n, 9);
+    assert.equal((await db.getAsync("SELECT seq FROM sqlite_sequence WHERE name='Settlements'")).seq, 700);
+    assert.deepEqual(await db.allAsync("PRAGMA foreign_key_check"), []);
+    await db.closeAsync(); const stable = digest(f.filename); const again = f.open();
+    assert.deepEqual((await again.ready).appliedVersions, []); await again.closeAsync(); assert.equal(digest(f.filename), stable);
+});
+
+test("failure during v2 to v3 migration restores all original rows, schema and version", async t => {
+    const f = fixture(t); await legacy(f.filename, { tokenNullable: true, failureReason: true, version: 2 });
+    await withRaw(f.filename, db => db.exec(itemSchema));
+    await withRaw(f.filename, async db => {
+        const before = await snapshot(db);
+        await assert.rejects(migrateDatabase({ ...db, async run(sql, params) {
+            const result = await db.run(sql, params);
+            if (sql === "PRAGMA user_version = 3") throw new Error("Synthetic v3 fault");
+            return result;
+        } }), /Synthetic v3 fault/);
+        assert.deepEqual(await snapshot(db), before);
+        assert.equal((await db.get("PRAGMA foreign_keys")).foreign_keys, 1);
+    });
+});
+
+test("version 3 with a missing reason column fails without rebuilding historical settlements", async t => {
+    const f = fixture(t); await legacy(f.filename, { tokenNullable: true, failureReason: true, version: 3 });
+    await withRaw(f.filename, db => db.exec(itemSchema)); const before = digest(f.filename); const db = f.open();
+    await assert.rejects(db.ready, { code: "DB_SCHEMA_VERSION_MISMATCH" }); await db.closeAsync(); assert.equal(digest(f.filename), before);
 });
