@@ -96,7 +96,8 @@ HTTP 200 example, using entirely synthetic records:
         "OrderID": "SYNTHETIC-ORDER-001",
         "FinalShipmentAmount": 75,
         "SettlementDate": "2030-01-02T12:00:00Z",
-        "SettlementResult": "Success"
+        "SettlementResult": "Success",
+        "UnderSettlementReason": "Partial fulfillment"
       }
     ]
   }
@@ -110,7 +111,7 @@ Orders columns above plus exactly these related-record fields:
 | --- | --- |
 | `Items` | Array of OrderItemID, OrderID, ProductID, ProductName, UnitPriceCents, Quantity; ascending OrderItemID |
 | `LatestAuthorization` | NULL if absent; otherwise AuthorizationID, AuthorizationAmount, TransactionDateTime, AuthExpirationDate, AuthorizationResult from the highest-ID authorization |
-| `Settlements` | Array of SettlementID, OrderID, FinalShipmentAmount, SettlementDate, SettlementResult; descending SettlementID |
+| `Settlements` | Array of SettlementID, OrderID, FinalShipmentAmount, SettlementDate, SettlementResult, UnderSettlementReason; descending SettlementID |
 
 `OrderStatus` is the currently stored order status. `OrderTotal` is the original
 stored numeric-dollar total; it is not replaced by the authorization amount or
@@ -191,3 +192,8 @@ Stage 6 now provides [atomic settlement safeguards](SETTLEMENTS.md); order queri
 continue to report stored values without making eligibility decisions. Warehouse
 detail display remains pending. The integrated [payment workflow](PAYMENTS.md)
 adds Payment Review to the dashboard filter; live gateway behavior is unverified.
+
+Settlement history includes the persisted nullable UnderSettlementReason introduced
+by migration 3. Historical NULL means no reason was recorded; queries do not infer
+or backfill a reason. The warehouse renders these recorded details for settled
+orders as well as showing the committed response after a new settlement.

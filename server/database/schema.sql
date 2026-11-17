@@ -1,4 +1,4 @@
--- Current schema: version 2. user_version is managed by migrations.js.
+-- Current schema: version 3. user_version is managed by migrations.js.
 CREATE TABLE IF NOT EXISTS Products (
     ProductID INTEGER PRIMARY KEY AUTOINCREMENT,
     Name TEXT NOT NULL,
@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS Settlements (
     FinalShipmentAmount REAL NOT NULL,
     SettlementDate TEXT NOT NULL,
     SettlementResult TEXT NOT NULL,
+    UnderSettlementReason TEXT,
     FOREIGN KEY (OrderID) REFERENCES Orders(OrderID) ON DELETE CASCADE
 );
 

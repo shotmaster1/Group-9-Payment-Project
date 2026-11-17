@@ -89,7 +89,7 @@ async function getOrderDetails(orderId, { database = defaultDatabase } = {}) {
             FROM PaymentAuthorizations WHERE OrderID = ?
             ORDER BY AuthorizationID DESC LIMIT 1`, [orderId]);
         const settlements = await tx.all(`
-            SELECT SettlementID, OrderID, FinalShipmentAmount, SettlementDate, SettlementResult
+            SELECT SettlementID, OrderID, FinalShipmentAmount, SettlementDate, SettlementResult, UnderSettlementReason
             FROM Settlements WHERE OrderID = ? ORDER BY SettlementID DESC`, [orderId]);
         return { ...order, Items: items, LatestAuthorization: publicAuthorization(authorization) || null, Settlements: settlements };
     });

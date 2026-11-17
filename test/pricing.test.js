@@ -144,7 +144,7 @@ test("pricing is read-only and does not change products, PNG paths, schema or or
     await priceCart([{productId:1,quantity:2},{productId:2,quantity:1}],{database:db});
     await assert.rejects(priceCart([{productId:9999,quantity:1}],{database:db}),{code:"PRODUCT_NOT_FOUND"});
     assert.equal(hash(filename),before);
-    assert.equal((await db.getAsync("PRAGMA user_version")).user_version,2);
+    assert.equal((await db.getAsync("PRAGMA user_version")).user_version,3);
     for (const name of ["Orders","OrderItems","PaymentAuthorizations","Settlements"]) {
         assert.equal((await db.getAsync("SELECT COUNT(*) AS count FROM "+name)).count,0);
     }

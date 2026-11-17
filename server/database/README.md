@@ -2,7 +2,7 @@
 
 `database.js` owns connections, readiness, Promise helpers, and managed transactions.
 `db.js` re-exports the same lazy default facade for existing imports. `migrations.js`
-upgrades supported schemas and `schema.sql` mirrors the current version-2 structure.
+upgrades supported schemas and `schema.sql` mirrors the current version-3 structure.
 
 ## Connection configuration
 
@@ -26,10 +26,11 @@ unversioned, not empty: existing tables and records are inspected before upgradi
 | 0 | Legacy or unversioned layout; may already contain historical records |
 | 1 | Add `PaymentAuthorizations.FailureReason` if absent and make `AuthorizationToken` nullable if necessary |
 | 2 | Add snapshot-based `OrderItems`, without backfilling unknown historical items |
+| 3 | Add nullable Settlements.UnderSettlementReason; historical reasons remain NULL |
 
 Migration decisions are made after acquiring `BEGIN IMMEDIATE`. Pending migrations,
 seed inserts, and version increments commit together. An error rolls all of them
-back. Reopening version 2 validates the schema and skips both migration steps.
+back. Reopening version 3 validates the schema and skips all applied migration steps.
 A fresh database follows the same version sequence, creates all five application
 tables, and seeds the original five products only when Products is empty.
 New seeds use `/img/p1.png` through `/img/p5.png`, matching storefront PR #4.
@@ -42,8 +43,8 @@ The initializer returns a report through `await db.ready`:
 // Example for a supported legacy version-zero database:
 {
     fromVersion: 0,
-    toVersion: 2,
-    appliedVersions: [1, 2],
+    toVersion: 3,
+    appliedVersions: [1, 2, 3],
     existingForeignKeyViolations: 0
 }
 ```
@@ -171,3 +172,19 @@ including one highest-ID authorization per order. Stage 6 now provides
 helpers and unchanged schema. The integrated [checkout/payment workflow](../services/PAYMENTS.md)
 now uses these helpers for quoted order creation and atomic result persistence.
 No additional schema migration or real database access was needed for that integration.
+
+## Settlement reason migration (version 3)
+
+Version 2 databases receive one additive nullable TEXT column on Settlements.
+There is no settlement-table rebuild, backfill, or new uniqueness constraint.
+Existing rows, IDs, foreign keys, indexes, triggers, and sequence high-water marks
+remain intact, including historical duplicate records. Fresh databases include the
+column in the schema mirror. Supported version 0/1 databases apply the prior stages
+and version 3 in the same preserving transaction. A fault rolls back schema, data,
+and user_version together. A declared version 3 without a compatible nullable
+reason column fails closed. Reopening a valid v3 database does not reapply changes.
+
+Initialization automatically runs pending migrations on the selected database.
+Use disposable databases during feature verification; deployment to an existing
+demo or project database requires a separately approved consistent backup and
+migration. Do not launch feature code against those protected databases during tests.

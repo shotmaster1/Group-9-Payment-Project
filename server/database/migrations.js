@@ -3,7 +3,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 
-const CURRENT_SCHEMA_VERSION = 2;
+const CURRENT_SCHEMA_VERSION = 3;
 const schema = fs.readFileSync(path.join(__dirname, "schema.sql"), "utf8");
 const definitions = new Map([...schema.matchAll(/CREATE TABLE IF NOT EXISTS (\w+) \([\s\S]*?\n\);/g)]
     .map((match) => [match[1], match[0]]));
@@ -118,6 +118,7 @@ async function inspectBase(db, version) {
             continue;
         }
         requireColumns(info, columns, name);
+        if (name === "Settlements" && version >= 3) inspectReasonColumn(info);
         if (name !== "PaymentAuthorizations") continue;
         const token = column(info, "AuthorizationToken");
         if (info.columns.some((item) => item.hidden) || token.pk) {
@@ -197,6 +198,20 @@ async function inspectItems(db) {
     }
 }
 
+function inspectReasonColumn(info) {
+    const reason = column(info, "UnderSettlementReason");
+    if (!reason || reason.type.toUpperCase() !== "TEXT" || reason.notnull || reason.pk || reason.hidden) {
+        throw failure("DB_SCHEMA_VERSION_MISMATCH", "Settlement reason must be a nullable TEXT column.");
+    }
+}
+async function settlementReasonMigration(db) {
+    const info = await table(db, "Settlements");
+    if (!column(info, "UnderSettlementReason")) {
+        await db.run("ALTER TABLE " + quote(info.name) + " ADD COLUMN UnderSettlementReason TEXT");
+    }
+    inspectReasonColumn(await table(db, "Settlements"));
+}
+
 async function foreignKeyState(db) {
     const rows = await db.all('SELECT "table", CAST(rowid AS TEXT) AS rowid, parent, fkid FROM pragma_foreign_key_check');
     return rows.map((row) => JSON.stringify([row.table, row.rowid, row.parent, row.fkid])).sort();
@@ -236,6 +251,11 @@ async function migrateDatabase(db, seed = async () => {}) {
             await inspectItems(db);
             await db.run("PRAGMA user_version = 2");
             appliedVersions.push(2);
+        }
+        if (version < 3) {
+            await settlementReasonMigration(db);
+            await db.run("PRAGMA user_version = 3");
+            appliedVersions.push(3);
         }
         await seed(db);
         await inspectBase(db, CURRENT_SCHEMA_VERSION);

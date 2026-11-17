@@ -205,7 +205,7 @@ test("new detail response allowlists fields even when synthetic tables contain s
     assert.deepEqual(Object.keys(detail).sort(), ["OrderID", "CustomerName", "CustomerEmail", "ShippingAddress", "City", "State", "Zip", "OrderDate", "OrderTotal", "OrderStatus", "Items", "LatestAuthorization", "Settlements"].sort());
     assert.deepEqual(Object.keys(detail.Items[0]).sort(), ["OrderItemID", "OrderID", "ProductID", "ProductName", "UnitPriceCents", "Quantity"].sort());
     assert.deepEqual(Object.keys(detail.LatestAuthorization).sort(), ["AuthorizationID", "AuthorizationAmount", "TransactionDateTime", "AuthExpirationDate", "AuthorizationResult"].sort());
-    assert.deepEqual(Object.keys(detail.Settlements[0]).sort(), ["SettlementID", "OrderID", "FinalShipmentAmount", "SettlementDate", "SettlementResult"].sort());
+    assert.deepEqual(Object.keys(detail.Settlements[0]).sort(), ["SettlementID", "OrderID", "FinalShipmentAmount", "SettlementDate", "SettlementResult", "UnderSettlementReason"].sort());
     assert.doesNotMatch(JSON.stringify(detail), /SYNTHETIC-(?:SECRET|PAN|CVV|FULL-PAN)|AuthorizationToken|CardNumber|CardLast4|CardType|FailureReason|CVV/);
 });
 

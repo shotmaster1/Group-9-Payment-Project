@@ -45,8 +45,13 @@ Quentin's gateway source are untouched. No release/refund/capture is implemented
 
 ## POST /api/settlements
 
-The request remains `{ "orderId": "SYNTHETIC-001", "finalAmount": 80 }`.
-Only these two own data fields are accepted. Order IDs must be nonblank strings;
+An under-settlement request is:
+
+```json
+{ "orderId": "SYNTHETIC-001", "finalAmount": 80, "underSettlementReason": "Partial fulfillment" }
+```
+
+Only orderId, finalAmount and optional underSettlementReason own data fields are accepted. Order IDs must be nonblank strings;
 lookups preserve exact text, with SQL parameters rather than string interpolation.
 Browser-provided authorization amounts, clocks, or computed unused amounts are rejected.
 
@@ -66,13 +71,16 @@ HTTP 200, with synthetic data:
   "orderId": "SYNTHETIC-001",
   "finalAmount": 80,
   "authorizedAmount": 100,
-  "unusedAuthorizationAmount": 20
+  "unusedAuthorizationAmount": 20,
+  "underSettlementReason": "Partial fulfillment",
+  "orderStatus": "Settled"
 }
 ```
 
 The four existing fields and message are preserved. All amount fields are numeric
-dollars. `unusedAuthorizationAmount` is the only added success field, and is zero
-for an exact settlement. Under-settlements and exact settlements succeed; requests
+dollars. `unusedAuthorizationAmount` is zero for an exact settlement. The additional
+underSettlementReason is a string for an under-settlement and NULL for an exact
+settlement; orderStatus is Settled after the transaction commits. Under-settlements and exact settlements succeed; requests
 above the stored authorization amount are rejected. The original order total is
 not the authorization limit. No success boolean is required or added.
 
@@ -82,7 +90,7 @@ settlement and changes the order status. It does not contact any payment provide
 
 | HTTP status | Conditions / response |
 | --- | --- |
-| 400 | Invalid body/ID/amount; status other than Authorized; unsuccessful latest authorization; missing/invalid/expired expiration; unusable authorization amount; existing settlement history; over-limit amount |
+| 400 | Invalid body/ID/amount or missing/invalid under-settlement reason; status other than Authorized; unsuccessful latest authorization; missing/invalid/expired expiration; unusable authorization amount; existing settlement history; over-limit amount |
 | 404 | Missing order, or an Authorized order with no authorization record |
 | 500 | Database/transaction/write-count failure, rollback failure, or invalid backend clock |
 
@@ -96,11 +104,31 @@ are not included in responses. Unexpected failures use this message:
 }
 ```
 
-No 409/410/422 or other new error status is introduced. PR #5 treats 400/404 as
-definite rejections that allow correction, and 500/network failure as uncertain
-outcomes that lock the form pending verification. Its existing success validation
-accepts the additional field. It does not yet display that field separately.
-The HTML, Order ID prefill, navigation, and frontend code are not changed.
+No new HTTP error statuses are introduced. HTTP 400/404 permit input correction;
+500/network or invalid success responses lock the form pending verification.
+The warehouse loads GET /api/orders/:id before enabling submission. It uses
+LatestAuthorization.AuthorizationAmount, never OrderTotal, for its preview. Changing
+the ID immediately invalidates that preview; a request counter and AbortController
+prevent older responses from replacing the current order. Preview amounts are parsed
+to integer cents, and the service always revalidates inside the transaction.
+
+The four supported reasons are Unavailable inventory, Damaged items, Partial
+fulfillment and Other. No free text is accepted. Under-settlements without a reason
+now return HTTP 400; existing API consumers must supply this new field. Exact
+settlements still need only orderId and finalAmount. A valid stale reason on an exact
+request is discarded and stored as NULL; an invalid supplied reason is rejected.
+The dropdown is initially unselected, visible and required only for a valid positive
+under-settlement, and cleared for an exact/invalid amount.
+
+A successful warehouse confirmation uses only the committed response, shows the Order
+ID, authorization, final amount, unused authorization, applicable reason and Settled
+status, and keeps the form locked. The order-detail endpoint returns the saved reason
+in Settlements[].UnderSettlementReason. Reopening warehouse for a settled order shows
+recorded settlement details, including that reason; historical NULL reasons display
+Not recorded. All dynamic values are textContent. The explanation for unused
+amounts is:
+
+> The remaining authorized amount is not included in this final settlement. Any actual authorization release is handled separately by the payment provider.
 
 ## Atomic eligibility and persistence
 
@@ -125,13 +153,16 @@ same scope the service:
 5. Computes the nonnegative integer-cent difference, then validates its numeric-dollar
    representation with fromCents. No floating-point dollar subtraction is used.
 6. Validates expiration and reads the backend clock immediately before the first write.
-7. Inserts one Success settlement and conditionally changes Authorized to Settled.
+7. Requires an allowlisted reason for an under-settlement and snapshots it in the same transaction.
+8. Inserts one Success settlement and conditionally changes Authorized to Settled.
    Each write must affect exactly one row; ignored writes are failures too.
 
 Concurrent submissions on one or multiple connections serialize through SQLite's
 write lock. After one commits, the next observes Settled status/history and receives
 400. The service does not add a uniqueness constraint incompatible with historical
-records, alter the schema, change authorizations, or write unsuccessful attempts.
+records, change authorizations, or write unsuccessful attempts. Schema version 3
+adds the nullable reason column during database initialization; the settlement
+service itself never migrates the database.
 
 The existing central transaction helper rolls back failures and allows ordinary
 SQL failures to recover. If ROLLBACK itself fails, it preserves the original error,

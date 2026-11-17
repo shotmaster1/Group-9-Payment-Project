@@ -86,7 +86,7 @@ test("settlement uses the same UTC boundary and preserves all raw authorization 
         assert.equal(payment.status, 200);
         const before = await f.db.allAsync("SELECT * FROM PaymentAuthorizations");
         f.setTime(boundary + delta);
-        const settling = settleOrder({ orderId: payment.body.orderId, finalAmount: 80 }, { database: f.db, now: f.now });
+        const settling = settleOrder({ orderId: payment.body.orderId, finalAmount: 80 , underSettlementReason: "Other" }, { database: f.db, now: f.now });
         if (delta < 0) assert.equal((await settling).unusedAuthorizationAmount, 49.98);
         else {
             await assert.rejects(settling, { code: "AUTHORIZATION_EXPIRED", statusCode: 400 });
@@ -104,7 +104,7 @@ test("invalid or expired approval values remain review outcomes without replacem
         assert.equal(result.body.success, false); assert.equal(result.body.status, "Payment Review");
         assert.equal(result.body.code, raw === "2029-01-01T00:00:00.000" ? "AUTHORIZATION_EXPIRED" : "INVALID_AUTHORIZATION_EXPIRATION");
         assert.equal((await f.db.getAsync("SELECT AuthExpirationDate FROM PaymentAuthorizations")).AuthExpirationDate, raw);
-        await assert.rejects(settleOrder({ orderId: result.body.orderId, finalAmount: 1 }, { database: f.db, now: f.now }), { code: "ORDER_NOT_AUTHORIZED" });
+        await assert.rejects(settleOrder({ orderId: result.body.orderId, finalAmount: 1 , underSettlementReason: "Other" }, { database: f.db, now: f.now }), { code: "ORDER_NOT_AUTHORIZED" });
     }
 });
 
@@ -118,7 +118,7 @@ test("valid mock expiration cannot bypass amount matching, token validation or a
         const f = fixture(t, { body: { TokenExpirationDate: raw, ...overrides } });
         const result = await f.api("POST", "/", await f.payload());
         assert.equal(result.body.success, false); assert.equal(result.body.code, code); assert.equal(result.body.status, status);
-        await assert.rejects(settleOrder({ orderId: result.body.orderId, finalAmount: 1 }, { database: f.db, now: f.now }), { code: "ORDER_NOT_AUTHORIZED" });
+        await assert.rejects(settleOrder({ orderId: result.body.orderId, finalAmount: 1 , underSettlementReason: "Other" }, { database: f.db, now: f.now }), { code: "ORDER_NOT_AUTHORIZED" });
     }
 });
 
@@ -131,7 +131,7 @@ test("queries and compatibility never promote an existing Payment Review order o
     const detail = await getOrderDetails(id, { database: f.db });
     assert.equal(rows[0].AuthExpirationDate, raw + "Z"); assert.equal(rows[0].OrderStatus, "Payment Review");
     assert.equal(detail.LatestAuthorization.AuthExpirationDate, raw + "Z"); assert.equal(detail.OrderStatus, "Payment Review");
-    await assert.rejects(settleOrder({ orderId: id, finalAmount: 80 }, { database: f.db, now: f.now }), { code: "ORDER_NOT_AUTHORIZED" });
+    await assert.rejects(settleOrder({ orderId: id, finalAmount: 80 , underSettlementReason: "Other" }, { database: f.db, now: f.now }), { code: "ORDER_NOT_AUTHORIZED" });
     assert.deepEqual({ orders: await f.db.allAsync("SELECT * FROM Orders"), authorizations: await f.db.allAsync("SELECT * FROM PaymentAuthorizations") }, before);
     assert.equal(f.provider.calls.length, 0);
 });
@@ -155,13 +155,15 @@ test("actual checkout/dashboard/warehouse scripts complete the normalized mock t
     await row.children[9].children[0].click();
     assert.equal(dashboard.window.location.href, "warehouse.html?orderId=" + encodeURIComponent(id));
     const warehouse = browser("warehouse.html", { fetch: network.fetch, search: "?orderId=" + encodeURIComponent(id) });
-    warehouse.runScripts(); warehouse.get("finalAmount").value = "80.00";
+    warehouse.runScripts();
+    await waitFor(() => !warehouse.get("settlementSubmitButton").disabled, "warehouse authorization details"); warehouse.get("finalAmount").value = "80.00";
+    warehouse.get("underSettlementReason").value = "Other";
     await Promise.all([warehouse.get("settlementForm").dispatch("submit"), warehouse.get("settlementForm").dispatch("submit")]);
     assert.match(warehouse.get("result").textContent, /Successful settlement/);
     assert.equal(warehouse.get("settlementSubmitButton").disabled, true);
     assert.equal((await f.db.getAsync("SELECT COUNT(*) AS count FROM Settlements")).count, 1);
     assert.equal((await f.db.getAsync("SELECT AuthExpirationDate FROM PaymentAuthorizations")).AuthExpirationDate, raw);
-    const duplicate = await network.fetch("/api/settlements", { method: "POST", body: JSON.stringify({ orderId: id, finalAmount: 80 }) });
+    const duplicate = await network.fetch("/api/settlements", { method: "POST", body: JSON.stringify({ orderId: id, finalAmount: 80 , underSettlementReason: "Other" }) });
     assert.equal(duplicate.status, 400);
     assert.equal(f.provider.calls.filter(call => !call.oauth).length, 1);
 });

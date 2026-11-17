@@ -72,7 +72,7 @@ this code.** Do not delete it to resolve a mismatch. PRAGMA user_version migrati
 preserve supported historical records, primary keys, relationships, duplicate
 histories and product image paths. Version zero does not mean empty.
 
-The version-2 schema contains Products, Orders, PaymentAuthorizations, Settlements,
+The version-3 schema contains Products, Orders, PaymentAuthorizations, Settlements,
 and historical-snapshot OrderItems. AuthorizationToken is nullable and FailureReason
 exists. Empty Products receive five PNG-based seeds; existing product prices and
 PNG/JPG/custom image paths are not overwritten. No historical items are invented.
@@ -121,7 +121,7 @@ are atomic. Browser and backend protection prevent duplicate submissions.
 | POST | /api/orders | orderId/customer/items; Pending order and snapshots, no gateway call |
 | POST | /api/payments/quote | items only; authoritative prices and a five-minute signed quote |
 | POST | /api/payments | orderId/customer/items/quoteToken/card fields; priced order, gateway and atomic result persistence |
-| POST | /api/settlements | orderId/finalAmount; local settlement and unused amount |
+| POST | /api/settlements | orderId/finalAmount and reason for under-settlements; local settlement and unused authorization |
 
 JSON POST bodies use Content-Type: application/json. GET /api/products/:id is not
 implemented. Checkout must not first create its order through POST /api/orders:
@@ -183,7 +183,9 @@ A local under-settlement response for that authorization and an 80 shipment is:
   "orderId": "SYNTHETIC-ORDER-001",
   "finalAmount": 80,
   "authorizedAmount": 129.98,
-  "unusedAuthorizationAmount": 49.98
+  "unusedAuthorizationAmount": 49.98,
+  "underSettlementReason": "Partial fulfillment",
+  "orderStatus": "Settled"
 }
 ```
 
@@ -229,3 +231,20 @@ NODE_PATH=../Group-9-Payment-Project/node_modules npm test
 No new dependencies are required. Original branches/PRs and real databases are not
 modified by these tests. The current implementation changes remain subject to
 review before committing or pushing.
+
+## Warehouse settlement details
+
+Warehouse now loads the selected order's latest authorization through the backend,
+previews settlement and unused authorization amounts in integer cents, and requires
+an unselected reason dropdown for amounts below the authorization. Allowed reasons:
+Unavailable inventory, Damaged items, Partial fulfillment, Other. Exact settlements
+continue without a reason; older under-settlement API clients must now include
+underSettlementReason or receive HTTP 400. The selected reason is saved with the
+settlement and returned in order-detail history; historical NULL reasons are not
+invented. Successful confirmations show Settled status and the committed amounts.
+This remains one final local settlement per order, with no provider release or refund.
+
+Migration 3 adds nullable Settlements.UnderSettlementReason while preserving existing
+history. Do not run feature verification against a project or persistent demo database;
+tests use disposable SQLite databases. See the [settlement contract](server/services/SETTLEMENTS.md)
+and [database migration documentation](server/database/README.md).

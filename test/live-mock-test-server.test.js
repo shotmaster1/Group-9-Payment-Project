@@ -283,7 +283,7 @@ for (const scenario of ["approved", "timezone-free", "declined", "date-only", "a
         if (scenario === "timezone-free") assert.equal(auth.structure.expirationAssumption, "manhattan-mock-utc");
         assert.equal(auth.structure.amountMatches, scenario !== "amount-mismatch");
         assert.doesNotMatch(JSON.stringify(log), /SYNTHETIC_PRIVATE|4111111111111111/);
-        const settle = () => f.fetch("/api/settlements", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ orderId: id, finalAmount: 40 }) });
+        const settle = () => f.fetch("/api/settlements", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ orderId: id, finalAmount: 40 , underSettlementReason: "Other" }) });
         if (approved) {
             const settled = await settle(); assert.equal(settled.status, 200);
             assert.equal((await settled.json()).unusedAuthorizationAmount, 24.99);

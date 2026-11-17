@@ -99,7 +99,7 @@ test("exact-match policy preserves different actual approval amounts for review 
         assert.match(response.body.message, /Do not submit this payment again until its status is confirmed/);
         const detail = await getOrderDetails("SYNTHETIC-ORDER", { database: f.db });
         assert.equal(detail.OrderStatus, "Payment Review"); assert.equal(detail.OrderTotal, 129.98); assert.equal(detail.LatestAuthorization.AuthorizationAmount, amount);
-        await assert.rejects(settleOrder({ orderId: "SYNTHETIC-ORDER", finalAmount: 10 }, { database: f.db, now: f.now }), { code: "ORDER_NOT_AUTHORIZED" });
+        await assert.rejects(settleOrder({ orderId: "SYNTHETIC-ORDER", finalAmount: 10 , underSettlementReason: "Other" }, { database: f.db, now: f.now }), { code: "ORDER_NOT_AUTHORIZED" });
     }
 });
 
@@ -205,11 +205,11 @@ test("complete mocked order-to-settlement flow preserves dashboard fields and re
     assert.equal(payment.status, 200);
     const listed = await listOrders({ status: "Authorized", search: "alex@example.test" }, { database: f.db });
     assert.equal(listed.length, 1); assert.equal(listed[0].AuthorizationAmount, 129.98);
-    const settled = await settleOrder({ orderId: "FLOW", finalAmount: 80 }, { database: f.db, now: f.now });
+    const settled = await settleOrder({ orderId: "FLOW", finalAmount: 80 , underSettlementReason: "Other" }, { database: f.db, now: f.now });
     assert.equal(settled.unusedAuthorizationAmount, 49.98);
     const detail = await getOrderDetails("FLOW", { database: f.db });
     assert.equal(detail.OrderStatus, "Settled"); assert.equal(detail.Settlements.length, 1);
-    await assert.rejects(settleOrder({ orderId: "FLOW", finalAmount: 80 }, { database: f.db, now: f.now }));
+    await assert.rejects(settleOrder({ orderId: "FLOW", finalAmount: 80 , underSettlementReason: "Other" }, { database: f.db, now: f.now }));
 });
 
 

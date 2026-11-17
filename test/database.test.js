@@ -97,7 +97,7 @@ test("fresh initialization queues reads, enables foreign keys, and creates the v
     const count = await db.getAsync("SELECT COUNT(*) AS count FROM Products");
     assert.equal(count.count, 5);
     assert.equal((await db.getAsync("PRAGMA foreign_keys")).foreign_keys, 1);
-    assert.equal((await db.getAsync("PRAGMA user_version")).user_version, 2);
+    assert.equal((await db.getAsync("PRAGMA user_version")).user_version, 3);
     const tables = await db.allAsync("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name");
     assert.deepEqual(tables.map((row) => row.name), ["OrderItems", "Orders", "PaymentAuthorizations", "Products", "Settlements"]);
     assert.equal(await db.getAsync("SELECT * FROM Products WHERE ProductID = -1"), undefined);
@@ -287,10 +287,10 @@ test("legacy initialization preserves historical values while adding the Stage 2
         "INSERT INTO Products(ProductID,Name,Price,ImageURL) VALUES (7,'Synthetic legacy product',1.23,'/legacy.png');",
         "INSERT INTO Orders VALUES ('SYNTHETIC','Example','example@example.test','Synthetic','City','ST','00000','2030-01-01',1.23,'Authorized');",
         "INSERT INTO PaymentAuthorizations VALUES (17,'SYNTHETIC','synthetic-reference',1.23,'2030-01-01','2030-12-31','Success','visa','0000');",
-        "INSERT INTO Settlements VALUES (9,'SYNTHETIC',1.23,'2030-01-01','Success');",
+        "INSERT INTO Settlements (SettlementID,OrderID,FinalShipmentAmount,SettlementDate,SettlementResult) VALUES (9,'SYNTHETIC',1.23,'2030-01-01','Success');",
     ].join("\n"));
     const db = f.open();
-    assert.deepEqual((await db.ready).appliedVersions, [1, 2]);
+    assert.deepEqual((await db.ready).appliedVersions, [1, 2, 3]);
     assert.equal((await db.getAsync("SELECT * FROM Products WHERE ProductID = 7")).ImageURL, "/legacy.png");
     assert.deepEqual(await db.getAsync("SELECT AuthorizationID, OrderID, AuthorizationToken, FailureReason FROM PaymentAuthorizations"), {
         AuthorizationID: 17, OrderID: "SYNTHETIC", AuthorizationToken: "synthetic-reference", FailureReason: null,
